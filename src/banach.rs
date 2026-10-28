@@ -23,7 +23,7 @@ pub trait Element: Sized + Clone {
     }
 
     fn sub_ref(&self, other: &Self) -> Self {
-        self.sub(other.clone())
+        self.add_ref(&other.inv())
     }
 
     fn distance(&self, other: Self) -> Self::NormElement {
