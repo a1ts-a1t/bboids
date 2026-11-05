@@ -1,5 +1,6 @@
 mod banach;
 mod boids;
-mod ell_p;
+pub mod ell_p;
+mod numbers;
 
 pub use boids::next;
