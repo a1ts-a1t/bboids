@@ -2,7 +2,13 @@ use std::ops::Add;
 
 use crate::{arith::TryAdd, err::LinAlgError};
 
-struct Vector<T>(Vec<T>);
+pub struct Vector<T>(Vec<T>);
+
+impl<T> Vector<T> {
+    pub fn shape(&self) -> usize {
+        self.0.len()
+    }
+}
 
 impl<T> IntoIterator for Vector<T> {
     type Item = T;

@@ -1,12 +1,30 @@
-use std::iter;
+use std::{
+    iter::{self, zip},
+    ops::Add,
+};
 
 use num::Zero;
 
-use crate::err::ValueError;
+use crate::{
+    arith::TryAdd,
+    err::{LinAlgError, ValueError},
+};
 
+#[derive(PartialEq, Debug)]
 pub struct Matrix<T> {
     vec: Vec<T>,
     stride: usize,
+}
+
+impl<T> Matrix<T> {
+    pub fn shape(&self) -> (usize, usize) {
+        if self.stride == 0 {
+            return (0, 0);
+        }
+
+        let len = self.vec.len();
+        (len / self.stride, self.stride)
+    }
 }
 
 impl<T: Zero> Matrix<T> {
@@ -19,10 +37,11 @@ impl<T: Zero> Matrix<T> {
 }
 
 impl<T> Matrix<T> {
-    pub fn try_from_iter<Inner: Iterator<Item = T>, Outer: Iterator<Item = Inner>>(
-        mut value: Outer,
+    pub fn try_from_iter<Inner: IntoIterator<Item = T>, Outer: IntoIterator<Item = Inner>>(
+        value: Outer,
     ) -> Result<Self, ValueError> {
-        let mut first = match value.next() {
+        let mut value_iter = value.into_iter();
+        let first = match value_iter.next() {
             Some(v) => v,
             None => {
                 return Ok(Matrix {
@@ -35,16 +54,18 @@ impl<T> Matrix<T> {
         // find the stride while populating the vec
         let mut vec = Vec::new();
         let mut stride = 0usize;
-        while let Some(x) = first.next() {
+        let first_iter = first.into_iter();
+        for x in first_iter {
             vec.push(x);
             stride += 1;
         }
 
         // for the remaining inner iters, check their lengths
         // while populating the vec
-        while let Some(mut v) = value.next() {
+        for v in value_iter {
             let mut v_stride = 0usize;
-            while let Some(x) = v.next() {
+            let v_iter = v.into_iter();
+            for x in v_iter {
                 vec.push(x);
                 v_stride += 1;
             }
@@ -55,5 +76,115 @@ impl<T> Matrix<T> {
         }
 
         Ok(Matrix { vec, stride })
+    }
+}
+
+impl<T: Add<Output = T>> TryAdd for Matrix<T> {
+    type Error = LinAlgError;
+    type Output = Self;
+
+    fn try_add(self, other: Self) -> Result<Self::Output, Self::Error> {
+        if self.shape() != other.shape() {
+            return Err(LinAlgError::IncompatibleShape);
+        }
+
+        let sum_vec = zip(self.vec, other.vec).map(|(a, b)| a + b).collect();
+
+        Ok(Matrix {
+            vec: sum_vec,
+            stride: self.stride,
+        })
+    }
+}
+
+impl<T> TryAdd for &Matrix<T>
+where
+    T: Add<Output = T> + Copy,
+{
+    type Error = LinAlgError;
+    type Output = Matrix<T>;
+
+    fn try_add(self, other: Self) -> Result<Self::Output, Self::Error> {
+        if self.shape() != other.shape() {
+            return Err(LinAlgError::IncompatibleShape);
+        }
+
+        let sum_vec = zip(self.vec.iter(), other.vec.iter())
+            .map(|(a, b)| *a + *b)
+            .collect();
+
+        Ok(Matrix {
+            vec: sum_vec,
+            stride: self.stride,
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{arith::try_add, err::ValueError};
+
+    #[test]
+    fn test_zeros() {
+        let expected: Matrix<f64> = Matrix {
+            vec: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0].to_vec(),
+            stride: 3,
+        };
+        let actual: Matrix<f64> = Matrix::zeros((2, 3));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_try_from_iter() {
+        let expected: Matrix<f64> = Matrix {
+            vec: [1.0, 2.0, 3.0, 4.0, 5.0, 6.0].to_vec(),
+            stride: 3,
+        };
+        let actual: Matrix<f64> =
+            Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_try_from_iter_fails() {
+        let expected = ValueError;
+        let actual = Matrix::try_from_iter([[1, 2, 3].to_vec(), [4, 5].to_vec()]).unwrap_err();
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_try_add() {
+        let expected: Matrix<f64> = Matrix {
+            vec: [3.0, 4.0, 5.0, 6.0, 7.0, 8.0].to_vec(),
+            stride: 3,
+        };
+
+        let a = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
+        let b = Matrix::try_from_iter([[2.0, 2.0, 2.0], [2.0, 2.0, 2.0]]).unwrap();
+        let actual = a.try_add(b).unwrap();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_try_add_fails() {
+        let expected = LinAlgError::IncompatibleShape;
+
+        let a = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
+        let b = Matrix::try_from_iter([[2.0, 2.0], [2.0, 2.0]]).unwrap();
+        let actual = try_add(&a, &b).unwrap_err();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_shape() {
+        let expected = (2, 3);
+
+        let m = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
+        let actual = m.shape();
+
+        assert_eq!(expected, actual);
     }
 }
