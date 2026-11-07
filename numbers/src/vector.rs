@@ -1,12 +1,32 @@
-use std::ops::Add;
+use std::{borrow::Borrow, iter::zip, ops::Add};
 
-use crate::{arith::TryAdd, err::LinAlgError};
+use crate::{
+    arith::{Scalar, TryAdd},
+    err::LinAlgError,
+};
 
+#[derive(PartialEq, Debug)]
 pub struct Vector<T>(Vec<T>);
 
 impl<T> Vector<T> {
+    pub fn of<I: IntoIterator<Item = T>>(value: I) -> Self {
+        Vector(value.into_iter().collect())
+    }
+
     pub fn shape(&self) -> usize {
         self.0.len()
+    }
+}
+
+impl<T> From<Vec<T>> for Vector<T> {
+    fn from(value: Vec<T>) -> Self {
+        Vector(value)
+    }
+}
+
+impl<T: Clone> From<&[T]> for Vector<T> {
+    fn from(value: &[T]) -> Self {
+        Vector(value.to_vec())
     }
 }
 
@@ -36,5 +56,40 @@ impl<T: Add<Output = T>, I: IntoIterator<Item = T>> TryAdd for I {
         }
 
         Ok(sum)
+    }
+}
+
+pub fn dot<T: Scalar + Clone, Lhs: Borrow<Vector<T>>, Rhs: Borrow<Vector<T>>>(
+    lhs: Lhs,
+    rhs: Rhs,
+) -> Result<T, LinAlgError> {
+    let vec1 = &lhs.borrow().0;
+    let vec2 = &rhs.borrow().0;
+
+    if vec1.len() != vec2.len() {
+        return Err(LinAlgError::IncompatibleShape);
+    }
+
+    Ok(zip(vec1, vec2).fold(T::zero(), |acc, (a, b)| acc + (a.clone() * b.clone())))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dot() {
+        let expected = 20.0;
+        let actual = dot(Vector::of([1.0, 2.0, 3.0]), Vector::of([2.0, 3.0, 4.0])).unwrap();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_dot_fails() {
+        let expected = LinAlgError::IncompatibleShape;
+        let actual = dot(&Vector::of([1.0]), Vector::of([2.0, 3.0, 4.0])).unwrap_err();
+
+        assert_eq!(expected, actual);
     }
 }

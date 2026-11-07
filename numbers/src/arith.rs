@@ -3,7 +3,7 @@ use std::ops::{Add, Mul};
 use num::{Float, Signed, Zero};
 
 // element of a field
-pub trait Scalar: Sized + Add + Mul + Zero {
+pub trait Scalar: Sized + Add<Output = Self> + Mul<Output = Self> + Zero {
     fn neg(&self) -> Self;
     fn inverse(&self) -> Option<Self>;
 }
@@ -38,4 +38,15 @@ pub trait TryAdd<Rhs = Self> {
 
 pub fn try_add<Rhs, Lhs: TryAdd<Rhs>>(left: Lhs, right: Rhs) -> Result<Lhs::Output, Lhs::Error> {
     left.try_add(right)
+}
+
+pub trait TryMul<Rhs = Self> {
+    type Error;
+    type Output;
+
+    fn try_mul(self, other: Rhs) -> Result<Self::Output, Self::Error>;
+}
+
+pub fn try_mul<Rhs, Lhs: TryMul<Rhs>>(left: Lhs, right: Rhs) -> Result<Lhs::Output, Lhs::Error> {
+    left.try_mul(right)
 }

@@ -6,8 +6,10 @@ use std::{
 use num::{One, Zero};
 
 use crate::{
-    arith::TryAdd,
+    Vector,
+    arith::{Scalar, TryAdd, TryMul},
     err::{LinAlgError, ValueError},
+    vector,
 };
 
 #[derive(PartialEq, Debug)]
@@ -119,7 +121,7 @@ impl<T: Add<Output = T>> TryAdd for Matrix<T> {
 
 impl<T> TryAdd for &Matrix<T>
 where
-    T: Add<Output = T> + Copy,
+    T: Add<Output = T> + Clone,
 {
     type Error = LinAlgError;
     type Output = Matrix<T>;
@@ -130,7 +132,7 @@ where
         }
 
         let sum_vec = zip(self.vec.iter(), other.vec.iter())
-            .map(|(a, b)| *a + *b)
+            .map(|(a, b)| a.clone() + b.clone())
             .collect();
 
         Ok(Matrix {
@@ -140,10 +142,33 @@ where
     }
 }
 
+impl<T: Scalar + Clone> TryMul<Vector<T>> for Matrix<T> {
+    type Error = LinAlgError;
+    type Output = Vector<T>;
+
+    fn try_mul(self, other: Vector<T>) -> Result<Self::Output, Self::Error> {
+        if self.stride != other.shape() {
+            return Err(LinAlgError::IncompatibleShape);
+        }
+
+        let mut result = Vec::new();
+        let rows = self.vec.chunks(self.stride);
+        for row in rows {
+            let row_vec: Vector<T> = Vector::from(row);
+            result.push(vector::dot(row_vec, &other)?);
+        }
+
+        Ok(result.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{arith::try_add, err::ValueError};
+    use crate::{
+        arith::{try_add, try_mul},
+        err::ValueError,
+    };
 
     #[test]
     fn test_zeros() {
@@ -212,6 +237,16 @@ mod tests {
     fn test_identity() {
         let expected = Matrix::try_from_iter([[1, 0, 0], [0, 1, 0], [0, 0, 1]]).unwrap();
         let actual: Matrix<i32> = Matrix::identity(3);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_try_mul() {
+        let expected = Vector::of([5.0, 11.0]);
+        let matrix = Matrix::try_from_iter([[1.0, 2.0], [3.0, 4.0]]).unwrap();
+        let vector = Vector::of([1.0, 2.0]);
+        let actual = try_mul(matrix, vector).unwrap();
 
         assert_eq!(expected, actual);
     }
