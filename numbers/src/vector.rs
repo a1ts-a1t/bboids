@@ -5,14 +5,10 @@ use crate::{
     err::LinAlgError,
 };
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Vector<T>(Vec<T>);
 
 impl<T> Vector<T> {
-    pub fn of<I: IntoIterator<Item = T>>(value: I) -> Self {
-        Vector(value.into_iter().collect())
-    }
-
     pub fn shape(&self) -> usize {
         self.0.len()
     }
@@ -30,6 +26,18 @@ impl<T: Clone> From<&[T]> for Vector<T> {
     }
 }
 
+impl<const N: usize, T> From<[T; N]> for Vector<T> {
+    fn from(value: [T; N]) -> Self {
+        Vector(value.into())
+    }
+}
+
+impl<T> FromIterator<T> for Vector<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Vector(iter.into_iter().collect())
+    }
+}
+
 impl<T> IntoIterator for Vector<T> {
     type Item = T;
     type IntoIter = std::vec::IntoIter<T>;
@@ -39,9 +47,9 @@ impl<T> IntoIterator for Vector<T> {
     }
 }
 
-impl<T: Add<Output = T>, I: IntoIterator<Item = T>> TryAdd for I {
+impl<T: Add<Output = T>> TryAdd for Vector<T> {
     type Error = LinAlgError;
-    type Output = Vec<T>;
+    type Output = Self;
 
     fn try_add(self, other: Self) -> Result<Self::Output, Self::Error> {
         let mut self_iter = self.into_iter();
@@ -55,7 +63,7 @@ impl<T: Add<Output = T>, I: IntoIterator<Item = T>> TryAdd for I {
             return Err(LinAlgError::IncompatibleShape);
         }
 
-        Ok(sum)
+        Ok(Vector(sum))
     }
 }
 
@@ -80,7 +88,7 @@ mod tests {
     #[test]
     fn test_dot() {
         let expected = 20.0;
-        let actual = dot(Vector::of([1.0, 2.0, 3.0]), Vector::of([2.0, 3.0, 4.0])).unwrap();
+        let actual = dot(Vector::from([1.0, 2.0, 3.0]), Vector::from([2.0, 3.0, 4.0])).unwrap();
 
         assert_eq!(expected, actual);
     }
@@ -88,7 +96,7 @@ mod tests {
     #[test]
     fn test_dot_fails() {
         let expected = LinAlgError::IncompatibleShape;
-        let actual = dot(&Vector::of([1.0]), Vector::of([2.0, 3.0, 4.0])).unwrap_err();
+        let actual = dot(&Vector::from([1.0]), Vector::from([2.0, 3.0, 4.0])).unwrap_err();
 
         assert_eq!(expected, actual);
     }

@@ -243,9 +243,9 @@ mod tests {
 
     #[test]
     fn test_try_mul() {
-        let expected = Vector::of([5.0, 11.0]);
+        let expected = Vector::from([5.0, 11.0]);
         let matrix = Matrix::try_from_iter([[1.0, 2.0], [3.0, 4.0]]).unwrap();
-        let vector = Vector::of([1.0, 2.0]);
+        let vector = Vector::from([1.0, 2.0]);
         let actual = try_mul(matrix, vector).unwrap();
 
         assert_eq!(expected, actual);
