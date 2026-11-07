@@ -3,7 +3,7 @@ use std::{
     ops::Add,
 };
 
-use num::Zero;
+use num::{One, Zero};
 
 use crate::{
     arith::TryAdd,
@@ -25,10 +25,30 @@ impl<T> Matrix<T> {
         let len = self.vec.len();
         (len / self.stride, self.stride)
     }
+
+    pub fn is_square(&self) -> bool {
+        let shape = self.shape();
+        shape.0 == shape.1
+    }
+}
+
+impl<T: One + Zero> Matrix<T> {
+    pub fn identity(n: usize) -> Self {
+        let mut vec = Vec::new();
+        for i in 0..n * n {
+            if i % (n + 1) == 0 {
+                vec.push(T::one());
+            } else {
+                vec.push(T::zero());
+            }
+        }
+
+        Matrix { vec, stride: n }
+    }
 }
 
 impl<T: Zero> Matrix<T> {
-    fn zeros<S: Into<(usize, usize)>>(shape: S) -> Self {
+    pub fn zeros<S: Into<(usize, usize)>>(shape: S) -> Self {
         let (rows, cols) = shape.into();
         let len = rows * cols;
         let vec = iter::repeat_with(|| T::zero()).take(len).collect();
@@ -184,6 +204,14 @@ mod tests {
 
         let m = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
         let actual = m.shape();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_identity() {
+        let expected = Matrix::try_from_iter([[1, 0, 0], [0, 1, 0], [0, 0, 1]]).unwrap();
+        let actual: Matrix<i32> = Matrix::identity(3);
 
         assert_eq!(expected, actual);
     }
