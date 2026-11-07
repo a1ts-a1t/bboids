@@ -96,7 +96,7 @@ mod tests {
     #[test]
     fn test_dot_fails() {
         let expected = LinAlgError::IncompatibleShape;
-        let actual = dot(&Vector::from([1.0]), Vector::from([2.0, 3.0, 4.0])).unwrap_err();
+        let actual = dot(Vector::from([1.0]), Vector::from([2.0, 3.0, 4.0])).unwrap_err();
 
         assert_eq!(expected, actual);
     }
