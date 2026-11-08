@@ -44,6 +44,15 @@ impl<T> Matrix<T> {
     }
 }
 
+impl<T: Clone> Clone for Matrix<T> {
+    fn clone(&self) -> Self {
+        Matrix {
+            vec: self.vec.clone(),
+            stride: self.stride,
+        }
+    }
+}
+
 impl<T: Clone> Matrix<T> {
     pub fn transposed(&self) -> Self {
         let (m, n) = self.shape();
@@ -99,6 +108,58 @@ impl<T: Zero> Matrix<T> {
         let len = rows * cols;
         let vec = iter::repeat_with(|| T::zero()).take(len).collect();
         Matrix { vec, stride: cols }
+    }
+}
+
+impl<T: Zero + Clone> Matrix<T> {
+    pub fn triu(&self, offset: isize) -> Self {
+        let mut vec = [].to_vec();
+        for (idx, val) in self.vec.iter().enumerate() {
+            let i = idx / self.stride;
+            let j = idx % self.stride;
+
+            let offset_row = if offset >= 0 {
+                i.saturating_add(offset as usize)
+            } else {
+                i.saturating_sub(offset.unsigned_abs())
+            };
+
+            if offset_row <= j {
+                vec.push(val.clone());
+            } else {
+                vec.push(T::zero());
+            }
+        }
+
+        Matrix {
+            vec,
+            stride: self.stride,
+        }
+    }
+
+    pub fn tril(&self, offset: isize) -> Self {
+        let mut vec = [].to_vec();
+        for (idx, val) in self.vec.iter().enumerate() {
+            let i = idx / self.stride;
+            let j = idx % self.stride;
+
+            let offset_col = if offset >= 0 {
+                j.saturating_sub(offset.unsigned_abs())
+            } else {
+                j.saturating_add(offset.unsigned_abs())
+            };
+
+            if offset_col <= i {
+                vec.push(val.clone());
+            } else {
+                vec.push(T::zero());
+            }
+        }
+
+        Matrix {
+            vec,
+            stride: self.stride,
+        }
     }
 }
 
@@ -341,6 +402,26 @@ mod tests {
         let expected = Matrix::try_from_iter([[1, 2], [3, 4]]).unwrap();
         let mut actual = Matrix::try_from_iter([[1, 3], [2, 4]]).unwrap();
         actual.transpose();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_triu() {
+        let a = Matrix::try_from_iter([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]).unwrap();
+        let expected =
+            Matrix::try_from_iter([[1, 2, 3], [4, 5, 6], [0, 8, 9], [0, 0, 12]]).unwrap();
+        let actual = a.triu(-1);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_tril() {
+        let a = Matrix::try_from_iter([[1, 2, 3], [4, 5, 6], [7, 8, 9], [10, 11, 12]]).unwrap();
+        let expected =
+            Matrix::try_from_iter([[0, 0, 0], [4, 0, 0], [7, 8, 0], [10, 11, 12]]).unwrap();
+        let actual = a.tril(-1);
 
         assert_eq!(expected, actual);
     }
