@@ -42,6 +42,40 @@ impl<T> Matrix<T> {
     }
 }
 
+impl<T: Clone> Matrix<T> {
+    pub fn transposed(&self) -> Self {
+        let (m, n) = self.shape();
+
+        let mut vec = Vec::with_capacity(m * n);
+        for j in 0..n {
+            for i in 0..m {
+                vec.push(self[(i, j)].clone());
+            }
+        }
+
+        Matrix { vec, stride: m }
+    }
+
+    pub fn transpose(&mut self) {
+        if self.is_square() {
+            let (n, _) = self.shape();
+
+            for i in 0..n {
+                for j in i..n {
+                    self.vec.swap(i * n + j, j * n + i);
+                }
+            }
+
+            return;
+        }
+
+        // i didn't realize the rabbithole this was........
+        // i'm not gonna bother but further reading here
+        // https://en.wikipedia.org/wiki/In-place_matrix_transposition#Algorithms
+        *self = self.transposed();
+    }
+}
+
 impl<T: One + Zero> Matrix<T> {
     pub fn identity(n: usize) -> Self {
         let mut vec = Vec::new();
@@ -308,6 +342,33 @@ mod tests {
         let a = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
         let b = Matrix::try_from_iter([[1.0, 2.0], [3.0, 4.0]]).unwrap();
         let actual = try_mul(a, b).unwrap_err();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_index() {
+        let expected = 3;
+        let a = Matrix::try_from_iter([[1, 4], [2, 5], [3, 6]]).unwrap();
+        let actual = a[(2, 0)];
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_transposed() {
+        let expected = Matrix::try_from_iter([[1, 2, 3], [4, 5, 6]]).unwrap();
+        let a = Matrix::try_from_iter([[1, 4], [2, 5], [3, 6]]).unwrap();
+        let actual = a.transposed();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_transpose_square() {
+        let expected = Matrix::try_from_iter([[1, 2], [3, 4]]).unwrap();
+        let mut actual = Matrix::try_from_iter([[1, 3], [2, 4]]).unwrap();
+        actual.transpose();
 
         assert_eq!(expected, actual);
     }
