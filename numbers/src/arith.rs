@@ -1,10 +1,9 @@
-use std::ops::{Add, Mul};
+use std::ops::{Add, Mul, Neg};
 
 use num::{Float, Signed, Zero};
 
 // element of a field
-pub trait Scalar: Sized + Add<Output = Self> + Mul<Output = Self> + Zero {
-    fn neg(&self) -> Self;
+pub trait Scalar: Sized + Add<Output = Self> + Mul<Output = Self> + Zero + Neg {
     fn inverse(&self) -> Option<Self>;
 }
 
@@ -12,15 +11,11 @@ impl<T> Scalar for T
 where
     T: Float + Signed,
 {
-    fn neg(&self) -> Self {
-        -*self
-    }
-
     fn inverse(&self) -> Option<Self> {
-        if *self == Self::zero() || *self == Self::neg_zero() {
+        if self.is_zero() {
             None
         } else {
-            Some(Self::one() / *self)
+            Some(self.recip())
         }
     }
 }

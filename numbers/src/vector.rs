@@ -1,4 +1,8 @@
-use std::{borrow::Borrow, iter::zip, ops::Add};
+use std::{
+    borrow::Borrow,
+    iter::zip,
+    ops::{Add, Index},
+};
 
 use crate::{
     arith::{Scalar, TryAdd},
@@ -11,6 +15,14 @@ pub struct Vector<T>(Vec<T>);
 impl<T> Vector<T> {
     pub fn shape(&self) -> usize {
         self.0.len()
+    }
+}
+
+impl<T> Index<usize> for Vector<T> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.0[index]
     }
 }
 
