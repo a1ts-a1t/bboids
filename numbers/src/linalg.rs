@@ -10,14 +10,14 @@ impl<T: Scalar + Clone> TryMul<Vector<T>> for Matrix<T> {
     type Output = Vector<T>;
 
     fn try_mul(self, other: Vector<T>) -> Result<Self::Output, Self::Error> {
-        let n = self.shape().1;
+        let (m, n) = self.shape();
         if n != other.shape() {
             return Err(LinAlgError::IncompatibleShape);
         }
 
         let mut result = Vec::new();
-        for row in self.rows() {
-            let row_vec: Vector<T> = row.collect();
+        for i in 0..m {
+            let row_vec: Vector<T> = self.row(i).collect();
             result.push(vector::dot(row_vec, &other)?);
         }
 

@@ -1,6 +1,6 @@
 use std::{
     iter::{self, zip},
-    ops::{Add, Index},
+    ops::{Add, Index, IndexMut, RangeBounds},
 };
 
 use num::{One, Zero};
@@ -10,10 +10,88 @@ use crate::{
     err::{LinAlgError, ValueError},
 };
 
+pub trait MatrixIndex {
+    fn offset(&self, shape: (usize, usize)) -> usize;
+    fn rows(&self, shape: (usize, usize)) -> usize;
+    fn columns(&self, shape: (usize, usize)) -> usize;
+}
+
+// TODO: tests
+impl<R: RangeBounds<usize>> MatrixIndex for (R, R) {
+    fn offset(&self, (_, n): (usize, usize)) -> usize {
+        let (row_range, column_range) = self;
+        let i = match row_range.start_bound() {
+            std::ops::Bound::Included(start) => *start,
+            std::ops::Bound::Excluded(start) => start + 1,
+            std::ops::Bound::Unbounded => 0,
+        };
+
+        let j = match column_range.start_bound() {
+            std::ops::Bound::Included(start) => *start,
+            std::ops::Bound::Excluded(start) => start + 1,
+            std::ops::Bound::Unbounded => 0,
+        };
+
+        i * n + j
+    }
+
+    fn rows(&self, _: (usize, usize)) -> usize {
+        let row_range = &self.0;
+
+        let start = match row_range.start_bound() {
+            std::ops::Bound::Included(start) => *start,
+            std::ops::Bound::Excluded(start) => start + 1,
+            std::ops::Bound::Unbounded => 0,
+        };
+
+        let end = match row_range.start_bound() {
+            std::ops::Bound::Included(start) => *start,
+            std::ops::Bound::Excluded(start) => start + 1,
+            std::ops::Bound::Unbounded => 0,
+        };
+
+        end.saturating_sub(start) + 1
+    }
+
+    fn columns(&self, _: (usize, usize)) -> usize {
+        let column_range = &self.1;
+
+        let start = match column_range.start_bound() {
+            std::ops::Bound::Included(start) => *start,
+            std::ops::Bound::Excluded(start) => start + 1,
+            std::ops::Bound::Unbounded => 0,
+        };
+
+        let end = match column_range.start_bound() {
+            std::ops::Bound::Included(start) => *start,
+            std::ops::Bound::Excluded(start) => start + 1,
+            std::ops::Bound::Unbounded => 0,
+        };
+
+        end.saturating_sub(start) + 1
+    }
+}
+
 #[derive(PartialEq, Debug)]
 pub struct Matrix<T> {
     vec: Vec<T>,
     stride: usize,
+}
+
+pub struct MatrixView<'a, T> {
+    // resources from the underlying matrix
+    buffer: &'a [T],
+    stride: usize,
+    // specs of the particular view
+    offset: usize, // buffer[offset] is the first element of the view
+    rows: usize,
+    columns: usize,
+}
+
+impl<T> IndexMut<(usize, usize)> for Matrix<T> {
+    fn index_mut(&mut self, (row, col): (usize, usize)) -> &mut Self::Output {
+        &mut self.vec[row * self.stride + col]
+    }
 }
 
 impl<T> Index<(usize, usize)> for Matrix<T> {
@@ -39,24 +117,61 @@ impl<T> Matrix<T> {
         shape.0 == shape.1
     }
 
-    pub fn rows(&self) -> Vec<impl Iterator<Item = &T>> {
-        (0..self.shape().0)
-            .map(move |i| self.vec.iter().skip(i * self.stride).take(self.stride))
-            .collect()
+    pub fn view<'a, I: MatrixIndex>(&'a self, index: I) -> MatrixView<'a, T> {
+        let shape = self.shape();
+        MatrixView {
+            buffer: &self.vec,
+            stride: self.stride,
+            offset: index.offset(shape),
+            rows: index.rows(shape),
+            columns: index.columns(shape),
+        }
+    }
+
+    pub fn checked_view<'a, I: MatrixIndex>(&'a self, index: I) -> Option<MatrixView<'a, T>> {
+        let shape = self.shape();
+        let offset = index.offset(shape);
+        let rows = index.rows(shape);
+        let columns = index.columns(shape);
+
+        let (m, n) = shape;
+        if rows > m || columns > n || offset >= m * n {
+            return None;
+        }
+
+        Some(MatrixView {
+            buffer: &self.vec,
+            stride: self.stride,
+            offset,
+            rows,
+            columns,
+        })
     }
 
     pub fn row(&self, i: usize) -> impl Iterator<Item = &T> {
         self.vec.iter().skip(i * self.stride).take(self.stride)
     }
 
-    pub fn columns(&self) -> Vec<impl Iterator<Item = &T>> {
-        (0..self.shape().1)
-            .map(move |j| self.vec.iter().skip(j).step_by(self.stride))
-            .collect()
-    }
-
     pub fn column(&self, j: usize) -> impl Iterator<Item = &T> {
         self.vec.iter().skip(j).step_by(self.stride)
+    }
+}
+
+impl<'a, T> Index<(usize, usize)> for MatrixView<'a, T> {
+    type Output = T;
+
+    fn index(&self, (i, j): (usize, usize)) -> &Self::Output {
+        &self.buffer[self.offset + (self.stride * i) + j]
+    }
+}
+
+impl<'a, T> MatrixView<'a, T> {
+    pub fn get(&self, (i, j): (usize, usize)) -> Option<&T> {
+        if i >= self.rows || j >= self.columns {
+            return None;
+        }
+
+        Some(&self[(i, j)])
     }
 }
 
@@ -103,21 +218,6 @@ impl<T: Clone> Matrix<T> {
     }
 }
 
-impl<T: One + Zero> Matrix<T> {
-    pub fn identity(n: usize) -> Self {
-        let mut vec = Vec::new();
-        for i in 0..n * n {
-            if i % (n + 1) == 0 {
-                vec.push(T::one());
-            } else {
-                vec.push(T::zero());
-            }
-        }
-
-        Matrix { vec, stride: n }
-    }
-}
-
 impl<T: Zero> Matrix<T> {
     pub fn zeros<S: Into<(usize, usize)>>(shape: S) -> Self {
         let (rows, cols) = shape.into();
@@ -134,13 +234,7 @@ impl<T: Zero + Clone> Matrix<T> {
             let i = idx / self.stride;
             let j = idx % self.stride;
 
-            let offset_row = if offset >= 0 {
-                i.saturating_add(offset as usize)
-            } else {
-                i.saturating_sub(offset.unsigned_abs())
-            };
-
-            if offset_row <= j {
+            if i.saturating_add_signed(offset) <= j {
                 vec.push(val.clone());
             } else {
                 vec.push(T::zero());
@@ -159,13 +253,7 @@ impl<T: Zero + Clone> Matrix<T> {
             let i = idx / self.stride;
             let j = idx % self.stride;
 
-            let offset_col = if offset >= 0 {
-                j.saturating_sub(offset.unsigned_abs())
-            } else {
-                j.saturating_add(offset.unsigned_abs())
-            };
-
-            if offset_col <= i {
+            if j.saturating_sub_signed(offset) <= i {
                 vec.push(val.clone());
             } else {
                 vec.push(T::zero());
@@ -176,6 +264,21 @@ impl<T: Zero + Clone> Matrix<T> {
             vec,
             stride: self.stride,
         }
+    }
+}
+
+impl<T: One + Zero> Matrix<T> {
+    pub fn identity(n: usize) -> Self {
+        let mut vec = Vec::new();
+        for i in 0..n * n {
+            if i % (n + 1) == 0 {
+                vec.push(T::one());
+            } else {
+                vec.push(T::zero());
+            }
+        }
+
+        Matrix { vec, stride: n }
     }
 }
 
@@ -311,30 +414,6 @@ mod tests {
             stride: 3,
         };
         let actual: Matrix<f64> = Matrix::zeros((2, 3));
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn test_rows() {
-        let m: Matrix<f64> = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
-        let actual: Vec<Vec<f64>> = m
-            .rows()
-            .into_iter()
-            .map(|col| col.copied().collect())
-            .collect();
-        let expected = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn test_columns() {
-        let m: Matrix<f64> = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
-        let actual: Vec<Vec<f64>> = m
-            .columns()
-            .into_iter()
-            .map(|col| col.copied().collect())
-            .collect();
-        let expected = vec![vec![1.0, 4.0], vec![2.0, 5.0], vec![3.0, 6.0]];
         assert_eq!(expected, actual);
     }
 
