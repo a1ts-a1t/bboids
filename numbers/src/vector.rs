@@ -50,6 +50,12 @@ impl<T> FromIterator<T> for Vector<T> {
     }
 }
 
+impl<'a, T: Clone> FromIterator<&'a T> for Vector<T> {
+    fn from_iter<I: IntoIterator<Item = &'a T>>(iter: I) -> Self {
+        Vector(iter.into_iter().cloned().collect())
+    }
+}
+
 impl<T> IntoIterator for Vector<T> {
     type Item = T;
     type IntoIter = std::vec::IntoIter<T>;

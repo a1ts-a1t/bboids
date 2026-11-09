@@ -17,7 +17,7 @@ impl<T: Scalar + Clone> TryMul<Vector<T>> for Matrix<T> {
 
         let mut result = Vec::new();
         for row in self.rows() {
-            let row_vec: Vector<T> = Vector::from(row);
+            let row_vec: Vector<T> = row.collect();
             result.push(vector::dot(row_vec, &other)?);
         }
 

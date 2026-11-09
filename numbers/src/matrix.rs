@@ -39,8 +39,24 @@ impl<T> Matrix<T> {
         shape.0 == shape.1
     }
 
-    pub fn rows(&self) -> Vec<&[T]> {
-        self.vec.chunks(self.stride).collect()
+    pub fn rows(&self) -> Vec<impl Iterator<Item = &T>> {
+        (0..self.shape().0)
+            .map(move |i| self.vec.iter().skip(i * self.stride).take(self.stride))
+            .collect()
+    }
+
+    pub fn row(&self, i: usize) -> impl Iterator<Item = &T> {
+        self.vec.iter().skip(i * self.stride).take(self.stride)
+    }
+
+    pub fn columns(&self) -> Vec<impl Iterator<Item = &T>> {
+        (0..self.shape().1)
+            .map(move |j| self.vec.iter().skip(j).step_by(self.stride))
+            .collect()
+    }
+
+    pub fn column(&self, j: usize) -> impl Iterator<Item = &T> {
+        self.vec.iter().skip(j).step_by(self.stride)
     }
 }
 
@@ -295,6 +311,30 @@ mod tests {
             stride: 3,
         };
         let actual: Matrix<f64> = Matrix::zeros((2, 3));
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_rows() {
+        let m: Matrix<f64> = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
+        let actual: Vec<Vec<f64>> = m
+            .rows()
+            .into_iter()
+            .map(|col| col.copied().collect())
+            .collect();
+        let expected = vec![vec![1.0, 2.0, 3.0], vec![4.0, 5.0, 6.0]];
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_columns() {
+        let m: Matrix<f64> = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
+        let actual: Vec<Vec<f64>> = m
+            .columns()
+            .into_iter()
+            .map(|col| col.copied().collect())
+            .collect();
+        let expected = vec![vec![1.0, 4.0], vec![2.0, 5.0], vec![3.0, 6.0]];
         assert_eq!(expected, actual);
     }
 
