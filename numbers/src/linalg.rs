@@ -2,7 +2,6 @@ use crate::{
     Matrix, Vector,
     arith::{Scalar, TryMul},
     err::LinAlgError,
-    vector,
 };
 
 impl<T: Scalar + Clone> TryMul<Vector<T>> for Matrix<T> {
@@ -16,9 +15,12 @@ impl<T: Scalar + Clone> TryMul<Vector<T>> for Matrix<T> {
         }
 
         let mut result = Vec::new();
+        let column_vector: Matrix<T> = other.into();
         for i in 0..m {
-            let row_vec: Vector<T> = self.row(i).collect();
-            result.push(vector::dot(row_vec, &other)?);
+            // TODO: there has to be a cleaner way to do this
+            let row = self.row(i);
+            let product = row.try_mul(column_vector.clone())?;
+            result.push(product[(0, 0)].clone());
         }
 
         Ok(result.into())
