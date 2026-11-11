@@ -1,0 +1,83 @@
+use std::ops::Index;
+
+use crate::{
+    Matrix,
+    arith::{Scalar, TryMul},
+    err::LinAlgError,
+};
+
+pub struct MatrixView<'a, T> {
+    // resources from the underlying matrix
+    pub(crate) buffer: &'a [T],
+    pub(crate) stride: usize,
+    // specs of the particular view
+    pub(crate) offset: usize, // buffer[offset] is the first element of the view
+    pub(crate) rows: usize,
+    pub(crate) columns: usize,
+}
+
+impl<'a, T> Index<(usize, usize)> for MatrixView<'a, T> {
+    type Output = T;
+
+    fn index(&self, (i, j): (usize, usize)) -> &Self::Output {
+        &self.buffer[self.offset + (self.stride * i) + j]
+    }
+}
+
+impl<'a, T> MatrixView<'a, T> {
+    pub fn get(&self, (i, j): (usize, usize)) -> Option<&T> {
+        if i >= self.rows || j >= self.columns {
+            return None;
+        }
+
+        Some(&self[(i, j)])
+    }
+}
+
+impl<'a, T: Clone> MatrixView<'a, T> {
+    pub fn into_matrix(self) -> Matrix<T> {
+        let start_row = self.offset / self.stride;
+        let start_column = self.offset % self.stride;
+
+        let mut vec = Vec::with_capacity(self.rows * self.columns);
+        for (idx, value) in self.buffer.iter().enumerate() {
+            if idx < self.offset {
+                continue;
+            }
+
+            let i = idx / self.stride;
+            let j = idx % self.stride;
+
+            if i >= start_row
+                && i < start_row + self.rows
+                && j >= start_column
+                && j < start_column + self.columns
+            {
+                vec.push(value.clone());
+            }
+        }
+
+        Matrix {
+            vec,
+            stride: self.columns,
+        }
+    }
+}
+
+impl<'a, T: Scalar + Clone> TryMul<Matrix<T>> for MatrixView<'a, T> {
+    type Error = LinAlgError;
+    type Output = Matrix<T>;
+
+    fn try_mul(self, other: Matrix<T>) -> Result<Self::Output, Self::Error> {
+        self.into_matrix().try_mul(other)
+    }
+}
+
+impl<'a, T: Scalar + Clone> TryMul<MatrixView<'a, T>> for Matrix<T> {
+    type Error = LinAlgError;
+    type Output = Matrix<T>;
+
+    fn try_mul(self, other: MatrixView<'a, T>) -> Result<Self::Output, Self::Error> {
+        self.try_mul(other.into_matrix())
+    }
+}

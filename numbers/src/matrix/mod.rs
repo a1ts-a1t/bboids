@@ -1,92 +1,23 @@
+mod arith;
+mod index;
+mod view;
+
+pub use index::MatrixIndex;
+pub use view::MatrixView;
+
 use std::{
-    iter::{self, zip},
-    ops::{Add, Index, IndexMut, RangeBounds},
+    iter,
+    ops::{Index, IndexMut},
 };
 
 use num::{One, Zero};
 
-use crate::{
-    Vector,
-    arith::{Scalar, TryAdd, TryMul},
-    err::{LinAlgError, ValueError},
-};
-
-pub trait MatrixIndex {
-    fn offset(&self, shape: (usize, usize)) -> usize;
-    fn rows(&self, shape: (usize, usize)) -> usize;
-    fn columns(&self, shape: (usize, usize)) -> usize;
-}
-
-// TODO: tests
-impl<R: RangeBounds<usize>> MatrixIndex for (R, R) {
-    fn offset(&self, (_, n): (usize, usize)) -> usize {
-        let (row_range, column_range) = self;
-        let i = match row_range.start_bound() {
-            std::ops::Bound::Included(start) => *start,
-            std::ops::Bound::Excluded(start) => start + 1,
-            std::ops::Bound::Unbounded => 0,
-        };
-
-        let j = match column_range.start_bound() {
-            std::ops::Bound::Included(start) => *start,
-            std::ops::Bound::Excluded(start) => start + 1,
-            std::ops::Bound::Unbounded => 0,
-        };
-
-        i * n + j
-    }
-
-    fn rows(&self, _: (usize, usize)) -> usize {
-        let row_range = &self.0;
-
-        let start = match row_range.start_bound() {
-            std::ops::Bound::Included(start) => *start,
-            std::ops::Bound::Excluded(start) => start + 1,
-            std::ops::Bound::Unbounded => 0,
-        };
-
-        let end = match row_range.start_bound() {
-            std::ops::Bound::Included(start) => *start,
-            std::ops::Bound::Excluded(start) => start + 1,
-            std::ops::Bound::Unbounded => 0,
-        };
-
-        end.saturating_sub(start) + 1
-    }
-
-    fn columns(&self, _: (usize, usize)) -> usize {
-        let column_range = &self.1;
-
-        let start = match column_range.start_bound() {
-            std::ops::Bound::Included(start) => *start,
-            std::ops::Bound::Excluded(start) => start + 1,
-            std::ops::Bound::Unbounded => 0,
-        };
-
-        let end = match column_range.start_bound() {
-            std::ops::Bound::Included(start) => *start,
-            std::ops::Bound::Excluded(start) => start + 1,
-            std::ops::Bound::Unbounded => 0,
-        };
-
-        end.saturating_sub(start) + 1
-    }
-}
+use crate::{Vector, err::ValueError};
 
 #[derive(PartialEq, Debug)]
 pub struct Matrix<T> {
-    vec: Vec<T>,
-    stride: usize,
-}
-
-pub struct MatrixView<'a, T> {
-    // resources from the underlying matrix
-    buffer: &'a [T],
-    stride: usize,
-    // specs of the particular view
-    offset: usize, // buffer[offset] is the first element of the view
-    rows: usize,
-    columns: usize,
+    pub(crate) vec: Vec<T>,
+    pub(crate) stride: usize,
 }
 
 impl<T> IndexMut<(usize, usize)> for Matrix<T> {
@@ -171,72 +102,6 @@ impl<T> Matrix<T> {
 
     pub fn column(&self, j: usize) -> impl Iterator<Item = &T> {
         self.vec.iter().skip(j).step_by(self.stride)
-    }
-}
-
-impl<'a, T> Index<(usize, usize)> for MatrixView<'a, T> {
-    type Output = T;
-
-    fn index(&self, (i, j): (usize, usize)) -> &Self::Output {
-        &self.buffer[self.offset + (self.stride * i) + j]
-    }
-}
-
-impl<'a, T> MatrixView<'a, T> {
-    pub fn get(&self, (i, j): (usize, usize)) -> Option<&T> {
-        if i >= self.rows || j >= self.columns {
-            return None;
-        }
-
-        Some(&self[(i, j)])
-    }
-}
-
-impl<'a, T: Clone> MatrixView<'a, T> {
-    pub fn into_matrix(self) -> Matrix<T> {
-        let start_row = self.offset / self.stride;
-        let start_column = self.offset % self.stride;
-
-        let mut vec = Vec::with_capacity(self.rows * self.columns);
-        for (idx, value) in self.buffer.iter().enumerate() {
-            if idx < self.offset {
-                continue;
-            }
-
-            let i = idx / self.stride;
-            let j = idx % self.stride;
-
-            if i >= start_row
-                && i < start_row + self.rows
-                && j >= start_column
-                && j < start_column + self.columns
-            {
-                vec.push(value.clone());
-            }
-        }
-
-        Matrix {
-            vec,
-            stride: self.columns,
-        }
-    }
-}
-
-impl<'a, T: Scalar + Clone> TryMul<Matrix<T>> for MatrixView<'a, T> {
-    type Error = LinAlgError;
-    type Output = Matrix<T>;
-
-    fn try_mul(self, other: Matrix<T>) -> Result<Self::Output, Self::Error> {
-        self.into_matrix().try_mul(other)
-    }
-}
-
-impl<'a, T: Scalar + Clone> TryMul<MatrixView<'a, T>> for Matrix<T> {
-    type Error = LinAlgError;
-    type Output = Matrix<T>;
-
-    fn try_mul(self, other: MatrixView<'a, T>) -> Result<Self::Output, Self::Error> {
-        self.try_mul(other.into_matrix())
     }
 }
 
@@ -390,87 +255,11 @@ impl<T> Matrix<T> {
     }
 }
 
-impl<T: Add<Output = T>> TryAdd for Matrix<T> {
-    type Error = LinAlgError;
-    type Output = Self;
-
-    fn try_add(self, other: Self) -> Result<Self::Output, Self::Error> {
-        if self.shape() != other.shape() {
-            return Err(LinAlgError::IncompatibleShape);
-        }
-
-        let sum_vec = zip(self.vec, other.vec).map(|(a, b)| a + b).collect();
-
-        Ok(Matrix {
-            vec: sum_vec,
-            stride: self.stride,
-        })
-    }
-}
-
-impl<T> TryAdd for &Matrix<T>
-where
-    T: Add<Output = T> + Clone,
-{
-    type Error = LinAlgError;
-    type Output = Matrix<T>;
-
-    fn try_add(self, other: Self) -> Result<Self::Output, Self::Error> {
-        if self.shape() != other.shape() {
-            return Err(LinAlgError::IncompatibleShape);
-        }
-
-        let sum_vec = zip(self.vec.iter(), other.vec.iter())
-            .map(|(a, b)| a.clone() + b.clone())
-            .collect();
-
-        Ok(Matrix {
-            vec: sum_vec,
-            stride: self.stride,
-        })
-    }
-}
-
-impl<T: Scalar + Clone> TryMul<Matrix<T>> for Matrix<T> {
-    type Error = LinAlgError;
-    type Output = Matrix<T>;
-
-    fn try_mul(self, other: Matrix<T>) -> Result<Self::Output, Self::Error> {
-        let (m, k) = self.shape();
-        let (k_b, n) = other.shape();
-
-        if k != k_b {
-            return Err(LinAlgError::IncompatibleShape);
-        }
-
-        // bro, you are not getting a sub-cubic algorithm here
-        // this is taken from lapack/blas's dgemm.f
-        // https://netlib.org/lapack/lapack-3.1.1/html/dgemm.f.html
-        let mut product = vec![T::zero(); m * n];
-        for i in 0..m {
-            for l in 0..k {
-                let a_il = self[(i, l)].clone();
-                for j in 0..n {
-                    product[i * n + j] =
-                        product[i * n + j].clone() + a_il.clone() * other[(l, j)].clone();
-                }
-            }
-        }
-
-        Ok(Matrix {
-            vec: product,
-            stride: n,
-        })
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        arith::{try_add, try_mul},
-        err::ValueError,
-    };
+
+    use crate::err::ValueError;
 
     #[test]
     fn test_zeros() {
@@ -501,31 +290,6 @@ mod tests {
     }
 
     #[test]
-    fn test_try_add() {
-        let expected: Matrix<f64> = Matrix {
-            vec: [3.0, 4.0, 5.0, 6.0, 7.0, 8.0].to_vec(),
-            stride: 3,
-        };
-
-        let a = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
-        let b = Matrix::try_from_iter([[2.0, 2.0, 2.0], [2.0, 2.0, 2.0]]).unwrap();
-        let actual = a.try_add(b).unwrap();
-
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn test_try_add_fails() {
-        let expected = LinAlgError::IncompatibleShape;
-
-        let a = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
-        let b = Matrix::try_from_iter([[2.0, 2.0], [2.0, 2.0]]).unwrap();
-        let actual = try_add(&a, &b).unwrap_err();
-
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
     fn test_shape() {
         let expected = (2, 3);
 
@@ -539,26 +303,6 @@ mod tests {
     fn test_identity() {
         let expected = Matrix::try_from_iter([[1, 0, 0], [0, 1, 0], [0, 0, 1]]).unwrap();
         let actual: Matrix<i32> = Matrix::identity(3);
-
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn test_try_mul_matrix() {
-        let expected = Matrix::try_from_iter([[58.0, 64.0], [139.0, 154.0]]).unwrap();
-        let a = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
-        let b = Matrix::try_from_iter([[7.0, 8.0], [9.0, 10.0], [11.0, 12.0]]).unwrap();
-        let actual = try_mul(a, b).unwrap();
-
-        assert_eq!(expected, actual);
-    }
-
-    #[test]
-    fn test_try_mul_matrix_fails() {
-        let expected = LinAlgError::IncompatibleShape;
-        let a = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
-        let b = Matrix::try_from_iter([[1.0, 2.0], [3.0, 4.0]]).unwrap();
-        let actual = try_mul(a, b).unwrap_err();
 
         assert_eq!(expected, actual);
     }
