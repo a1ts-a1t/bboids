@@ -6,7 +6,6 @@ pub trait MatrixIndex {
     fn columns(&self, shape: (usize, usize)) -> usize;
 }
 
-// TODO: tests
 impl<R: RangeBounds<usize>> MatrixIndex for (R, R) {
     fn offset(&self, (_, n): (usize, usize)) -> usize {
         let (row_range, column_range) = self;
@@ -59,5 +58,106 @@ impl<R: RangeBounds<usize>> MatrixIndex for (R, R) {
         };
 
         end.saturating_sub(start) + 1
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_offset() {
+        let expected = 8;
+
+        let shape: (usize, usize) = (5, 6);
+        let matrix_index = (1..2, 2..3);
+        let actual = matrix_index.offset(shape);
+
+        assert_eq!(expected, actual);
+
+        let expected = 8;
+
+        let matrix_index = (1..=2, 2..=3);
+        let actual = matrix_index.offset(shape);
+
+        assert_eq!(expected, actual);
+
+        let expected = 0;
+
+        let matrix_index = (..2, ..3);
+        let actual = matrix_index.offset(shape);
+
+        assert_eq!(expected, actual);
+
+        let expected = 8;
+
+        let matrix_index = (1.., 2..);
+        let actual = matrix_index.offset(shape);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_rows() {
+        let expected = 1;
+
+        let shape: (usize, usize) = (5, 6);
+        let matrix_index = (1..2, 2..3);
+        let actual = matrix_index.rows(shape);
+
+        assert_eq!(expected, actual);
+
+        let expected = 2;
+
+        let matrix_index = (1..=2, 2..=3);
+        let actual = matrix_index.rows(shape);
+
+        assert_eq!(expected, actual);
+
+        let expected = 2;
+
+        let matrix_index = (..2, ..3);
+        let actual = matrix_index.rows(shape);
+
+        assert_eq!(expected, actual);
+
+        let expected = 5;
+
+        let matrix_index = (1.., 2..);
+        let actual = matrix_index.rows(shape);
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_columns() {
+        let expected = 1;
+
+        let shape: (usize, usize) = (5, 6);
+        let matrix_index = (1..2, 2..3);
+        let actual = matrix_index.columns(shape);
+
+        assert_eq!(expected, actual);
+
+        let expected = 2;
+
+        let matrix_index = (1..=2, 2..=3);
+        let actual = matrix_index.columns(shape);
+
+        assert_eq!(expected, actual);
+
+        let expected = 3;
+
+        let matrix_index = (..2, ..3);
+        let actual = matrix_index.columns(shape);
+
+        assert_eq!(expected, actual);
+
+        let expected = 5;
+
+        let matrix_index = (1.., 2..);
+        let actual = matrix_index.columns(shape);
+
+        assert_eq!(expected, actual);
     }
 }
