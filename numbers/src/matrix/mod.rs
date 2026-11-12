@@ -33,6 +33,12 @@ impl<T> From<Vector<T>> for Matrix<T> {
     }
 }
 
+impl<'a, T: Clone> From<MatrixView<'a, T>> for Matrix<T> {
+    fn from(value: MatrixView<'a, T>) -> Self {
+        value.into_matrix()
+    }
+}
+
 impl<T> Index<(usize, usize)> for Matrix<T> {
     type Output = T;
 

@@ -25,7 +25,7 @@ impl<'a, T> Index<(usize, usize)> for MatrixView<'a, T> {
 }
 
 impl<'a, T> MatrixView<'a, T> {
-    pub fn get(&self, (i, j): (usize, usize)) -> Option<&T> {
+    pub fn get(&self, i: usize, j: usize) -> Option<&T> {
         if i >= self.rows || j >= self.columns {
             return None;
         }
@@ -35,7 +35,7 @@ impl<'a, T> MatrixView<'a, T> {
 }
 
 impl<'a, T: Clone> MatrixView<'a, T> {
-    pub fn into_matrix(self) -> Matrix<T> {
+    pub fn as_matrix(&self) -> Matrix<T> {
         let start_row = self.offset / self.stride;
         let start_column = self.offset % self.stride;
 
@@ -62,6 +62,10 @@ impl<'a, T: Clone> MatrixView<'a, T> {
             stride: self.columns,
         }
     }
+
+    pub fn into_matrix(self) -> Matrix<T> {
+        self.as_matrix()
+    }
 }
 
 impl<'a, T: Scalar + Clone> TryMul<Matrix<T>> for MatrixView<'a, T> {
@@ -79,5 +83,72 @@ impl<'a, T: Scalar + Clone> TryMul<MatrixView<'a, T>> for Matrix<T> {
 
     fn try_mul(self, other: MatrixView<'a, T>) -> Result<Self::Output, Self::Error> {
         self.try_mul(other.into_matrix())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_index() {
+        let matrix_view = MatrixView {
+            buffer: &[1, 2, 3, 4, 5, 6],
+            stride: 2,
+            offset: 2,
+            rows: 2,
+            columns: 2,
+        };
+
+        let expected = 6;
+        let actual = matrix_view[(1, 1)];
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_get() {
+        let matrix_view = MatrixView {
+            buffer: &[1, 2, 3, 4, 5, 6],
+            stride: 2,
+            offset: 2,
+            rows: 2,
+            columns: 2,
+        };
+
+        let expected = &6;
+        let actual = matrix_view.get(1, 1).unwrap();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_get_none() {
+        let matrix_view = MatrixView {
+            buffer: &[1, 2, 3, 4, 5, 6],
+            stride: 2,
+            offset: 2,
+            rows: 2,
+            columns: 2,
+        };
+
+        let actual = matrix_view.get(1, 2);
+        assert!(actual.is_none());
+    }
+
+    #[test]
+    fn test_as_matrix() {
+        let matrix_view = MatrixView {
+            buffer: &[1, 2, 3, 4, 5, 6],
+            stride: 2,
+            offset: 2,
+            rows: 2,
+            columns: 2,
+        };
+
+        let expected = Matrix::try_from_iter([[3, 4], [5, 6]]).unwrap();
+        let actual = matrix_view.as_matrix();
+
+        assert_eq!(expected, actual);
     }
 }
