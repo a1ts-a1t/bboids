@@ -1,10 +1,6 @@
 use std::ops::Index;
 
-use crate::{
-    Matrix,
-    arith::{Scalar, TryMul},
-    err::LinAlgError,
-};
+use crate::Matrix;
 
 pub struct MatrixView<'a, T> {
     // resources from the underlying matrix
@@ -65,24 +61,6 @@ impl<'a, T: Clone> MatrixView<'a, T> {
 
     pub fn into_matrix(self) -> Matrix<T> {
         self.as_matrix()
-    }
-}
-
-impl<'a, T: Scalar + Clone> TryMul<Matrix<T>> for MatrixView<'a, T> {
-    type Error = LinAlgError;
-    type Output = Matrix<T>;
-
-    fn try_mul(self, other: Matrix<T>) -> Result<Self::Output, Self::Error> {
-        self.into_matrix().try_mul(other)
-    }
-}
-
-impl<'a, T: Scalar + Clone> TryMul<MatrixView<'a, T>> for Matrix<T> {
-    type Error = LinAlgError;
-    type Output = Matrix<T>;
-
-    fn try_mul(self, other: MatrixView<'a, T>) -> Result<Self::Output, Self::Error> {
-        self.try_mul(other.into_matrix())
     }
 }
 

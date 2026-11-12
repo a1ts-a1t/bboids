@@ -1,9 +1,10 @@
-use std::{iter::zip, ops::Add};
+use std::{borrow::Borrow, iter::zip, ops::Add};
 
 use crate::{
-    Matrix,
+    Matrix, Vector,
     arith::{Scalar, TryAdd, TryMul},
     err::LinAlgError,
+    matrix::MatrixView,
 };
 
 impl<T: Add<Output = T>> TryAdd for Matrix<T> {
@@ -47,13 +48,22 @@ where
     }
 }
 
-impl<T: Scalar + Clone> TryMul<Matrix<T>> for Matrix<T> {
+impl<T: Scalar + Clone, Rhs: Borrow<Matrix<T>>> TryMul<Rhs> for Matrix<T> {
     type Error = LinAlgError;
     type Output = Matrix<T>;
 
-    fn try_mul(self, other: Matrix<T>) -> Result<Self::Output, Self::Error> {
+    fn try_mul(self, other: Rhs) -> Result<Self::Output, Self::Error> {
+        (&self).try_mul(other)
+    }
+}
+
+impl<T: Scalar + Clone, Rhs: Borrow<Matrix<T>>> TryMul<Rhs> for &Matrix<T> {
+    type Error = LinAlgError;
+    type Output = Matrix<T>;
+
+    fn try_mul(self, other: Rhs) -> Result<Self::Output, Self::Error> {
         let (m, k) = self.shape();
-        let (k_b, n) = other.shape();
+        let (k_b, n) = other.borrow().shape();
 
         if k != k_b {
             return Err(LinAlgError::IncompatibleShape);
@@ -68,7 +78,7 @@ impl<T: Scalar + Clone> TryMul<Matrix<T>> for Matrix<T> {
                 let a_il = self[(i, l)].clone();
                 for j in 0..n {
                     product[i * n + j] =
-                        product[i * n + j].clone() + a_il.clone() * other[(l, j)].clone();
+                        product[i * n + j].clone() + a_il.clone() * other.borrow()[(l, j)].clone();
                 }
             }
         }
@@ -77,6 +87,47 @@ impl<T: Scalar + Clone> TryMul<Matrix<T>> for Matrix<T> {
             vec: product,
             stride: n,
         })
+    }
+}
+
+impl<'a, T: Scalar + Clone, Rhs: Borrow<Matrix<T>>> TryMul<Rhs> for MatrixView<'a, T> {
+    type Error = LinAlgError;
+    type Output = Matrix<T>;
+
+    fn try_mul(self, other: Rhs) -> Result<Self::Output, Self::Error> {
+        self.into_matrix().try_mul(other.borrow())
+    }
+}
+
+impl<'a, T: Scalar + Clone, Rhs: Borrow<Matrix<T>>> TryMul<Rhs> for &MatrixView<'a, T> {
+    type Error = LinAlgError;
+    type Output = Matrix<T>;
+
+    fn try_mul(self, other: Rhs) -> Result<Self::Output, Self::Error> {
+        self.as_matrix().try_mul(other.borrow())
+    }
+}
+
+impl<T: Scalar + Clone> TryMul<Vector<T>> for Matrix<T> {
+    type Error = LinAlgError;
+    type Output = Vector<T>;
+
+    fn try_mul(self, other: Vector<T>) -> Result<Self::Output, Self::Error> {
+        let (m, n) = self.shape();
+        if n != other.shape() {
+            return Err(LinAlgError::IncompatibleShape);
+        }
+
+        let mut result = Vec::new();
+        let column_vector: Matrix<T> = other.into();
+        for i in 0..m {
+            // TODO: there has to be a cleaner way to do this
+            let row = self.row(i);
+            let product = row.try_mul(column_vector.clone())?;
+            result.push(product[(0, 0)].clone());
+        }
+
+        Ok(result.into())
     }
 }
 
@@ -127,6 +178,16 @@ mod tests {
         let a = Matrix::try_from_iter([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]).unwrap();
         let b = Matrix::try_from_iter([[1.0, 2.0], [3.0, 4.0]]).unwrap();
         let actual = try_mul(a, b).unwrap_err();
+
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_vector_try_mul() {
+        let expected = Vector::from([5.0, 11.0]);
+        let matrix = Matrix::try_from_iter([[1.0, 2.0], [3.0, 4.0]]).unwrap();
+        let vector = Vector::from([1.0, 2.0]);
+        let actual = try_mul(matrix, vector).unwrap();
 
         assert_eq!(expected, actual);
     }
