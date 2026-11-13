@@ -4,7 +4,7 @@ use crate::{
     Matrix, Vector,
     arith::{Scalar, TryAdd, TryMul},
     err::LinAlgError,
-    matrix::MatrixView,
+    matrix::View,
 };
 
 impl<T: Add<Output = T>> TryAdd for Matrix<T> {
@@ -90,7 +90,7 @@ impl<T: Scalar + Clone, Rhs: Borrow<Matrix<T>>> TryMul<Rhs> for &Matrix<T> {
     }
 }
 
-impl<'a, T: Scalar + Clone, Rhs: Borrow<Matrix<T>>> TryMul<Rhs> for MatrixView<'a, T> {
+impl<'a, T: Scalar + Clone, Rhs: Borrow<Matrix<T>>> TryMul<Rhs> for View<'a, T> {
     type Error = LinAlgError;
     type Output = Matrix<T>;
 
@@ -99,7 +99,7 @@ impl<'a, T: Scalar + Clone, Rhs: Borrow<Matrix<T>>> TryMul<Rhs> for MatrixView<'
     }
 }
 
-impl<'a, T: Scalar + Clone, Rhs: Borrow<Matrix<T>>> TryMul<Rhs> for &MatrixView<'a, T> {
+impl<'a, T: Scalar + Clone, Rhs: Borrow<Matrix<T>>> TryMul<Rhs> for &View<'a, T> {
     type Error = LinAlgError;
     type Output = Matrix<T>;
 

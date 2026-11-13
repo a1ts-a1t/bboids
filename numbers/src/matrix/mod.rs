@@ -5,8 +5,8 @@ mod view;
 mod view_mut;
 
 pub use index::MatrixIndex;
-pub use view::MatrixView;
-pub use view_mut::MatrixViewMut;
+pub use view::View;
+pub use view_mut::ViewMut;
 
 use std::{
     iter,
@@ -36,8 +36,8 @@ impl<T> From<Vector<T>> for Matrix<T> {
     }
 }
 
-impl<'a, T: Clone> From<MatrixView<'a, T>> for Matrix<T> {
-    fn from(value: MatrixView<'a, T>) -> Self {
+impl<'a, T: Clone> From<View<'a, T>> for Matrix<T> {
+    fn from(value: View<'a, T>) -> Self {
         value.into_matrix()
     }
 }
@@ -65,55 +65,52 @@ impl<T> Matrix<T> {
         shape.0 == shape.1
     }
 
-    pub fn view<'a, I: MatrixIndex>(&'a self, index: I) -> MatrixView<'a, T> {
+    pub fn view<'a, I: MatrixIndex>(&'a self, index: I) -> View<'a, T> {
         let (m, n) = self.shape();
         let region = Region::from_shape(m, n);
 
-        MatrixView {
+        View {
             buffer: &self.vec,
             region: region.crop(index),
         }
     }
 
-    pub fn view_mut<'a, I: MatrixIndex>(&'a mut self, index: I) -> MatrixViewMut<'a, T> {
+    pub fn view_mut<'a, I: MatrixIndex>(&'a mut self, index: I) -> ViewMut<'a, T> {
         let (m, n) = self.shape();
         let region = Region::from_shape(m, n).crop(index);
 
-        MatrixViewMut {
+        ViewMut {
             buffer: &mut self.vec,
             region,
         }
     }
 
-    pub fn checked_view<'a, I: MatrixIndex>(&'a self, index: I) -> Option<MatrixView<'a, T>> {
+    pub fn checked_view<'a, I: MatrixIndex>(&'a self, index: I) -> Option<View<'a, T>> {
         let (m, n) = self.shape();
         let region = Region::from_shape(m, n);
 
-        region.try_crop(index).map(|view_region| MatrixView {
+        region.try_crop(index).map(|view_region| View {
             buffer: &self.vec,
             region: view_region,
         })
     }
 
-    pub fn checked_view_mut<'a, I: MatrixIndex>(
-        &'a mut self,
-        index: I,
-    ) -> Option<MatrixViewMut<'a, T>> {
+    pub fn checked_view_mut<'a, I: MatrixIndex>(&'a mut self, index: I) -> Option<ViewMut<'a, T>> {
         let (m, n) = self.shape();
 
         Region::from_shape(m, n)
             .try_crop(index)
-            .map(|region| MatrixViewMut {
+            .map(|region| ViewMut {
                 buffer: &mut self.vec,
                 region,
             })
     }
 
-    pub fn row<'a>(&'a self, i: usize) -> MatrixView<'a, T> {
+    pub fn row<'a>(&'a self, i: usize) -> View<'a, T> {
         self.view((i..=i, ..))
     }
 
-    pub fn column<'a>(&'a self, j: usize) -> MatrixView<'a, T> {
+    pub fn column<'a>(&'a self, j: usize) -> View<'a, T> {
         self.view((.., j..=j))
     }
 }

@@ -2,22 +2,22 @@ use std::ops::{Index, IndexMut};
 
 use crate::{
     Matrix,
-    matrix::{MatrixIndex, MatrixView, region::Region},
+    matrix::{MatrixIndex, View, region::Region},
 };
 
 #[derive(PartialEq)]
-pub struct MatrixViewMut<'a, T> {
+pub struct ViewMut<'a, T> {
     pub(crate) buffer: &'a mut [T],
     pub(crate) region: Region,
 }
 
-impl<'a, T> IndexMut<(usize, usize)> for MatrixViewMut<'a, T> {
+impl<'a, T> IndexMut<(usize, usize)> for ViewMut<'a, T> {
     fn index_mut(&mut self, (i, j): (usize, usize)) -> &mut Self::Output {
         &mut self.buffer[self.region.buffer_index(i, j)]
     }
 }
 
-impl<'a, T> Index<(usize, usize)> for MatrixViewMut<'a, T> {
+impl<'a, T> Index<(usize, usize)> for ViewMut<'a, T> {
     type Output = T;
 
     fn index(&self, (i, j): (usize, usize)) -> &Self::Output {
@@ -25,7 +25,7 @@ impl<'a, T> Index<(usize, usize)> for MatrixViewMut<'a, T> {
     }
 }
 
-impl<'a, T> MatrixViewMut<'a, T> {
+impl<'a, T> ViewMut<'a, T> {
     pub fn get(&self, i: usize, j: usize) -> Option<&T> {
         if self.region.in_bounds(i, j) {
             Some(&self[(i, j)])
@@ -42,37 +42,34 @@ impl<'a, T> MatrixViewMut<'a, T> {
         }
     }
 
-    pub fn as_view<'b>(&'b self) -> MatrixView<'b, T> {
-        MatrixView {
+    pub fn as_view<'b>(&'b self) -> View<'b, T> {
+        View {
             buffer: self.buffer,
             region: self.region,
         }
     }
 
-    pub fn view_mut<'b, I: MatrixIndex>(&'b mut self, index: I) -> MatrixViewMut<'b, T> {
+    pub fn view_mut<'b, I: MatrixIndex>(&'b mut self, index: I) -> ViewMut<'b, T> {
         let region = self.region.crop(index);
 
-        MatrixViewMut {
+        ViewMut {
             buffer: self.buffer,
             region,
         }
     }
 
-    pub fn view<'b, I: MatrixIndex>(&'b self, index: I) -> MatrixView<'b, T> {
+    pub fn view<'b, I: MatrixIndex>(&'b self, index: I) -> View<'b, T> {
         let region = self.region.crop(index);
 
-        MatrixView {
+        View {
             buffer: self.buffer,
             region,
         }
     }
 
-    pub fn checked_view_mut<'b, I: MatrixIndex>(
-        &'b mut self,
-        index: I,
-    ) -> Option<MatrixViewMut<'b, T>> {
+    pub fn checked_view_mut<'b, I: MatrixIndex>(&'b mut self, index: I) -> Option<ViewMut<'b, T>> {
         match self.region.try_crop(index) {
-            Some(region) => Some(MatrixViewMut {
+            Some(region) => Some(ViewMut {
                 buffer: self.buffer,
                 region,
             }),
@@ -80,15 +77,15 @@ impl<'a, T> MatrixViewMut<'a, T> {
         }
     }
 
-    pub fn checked_view<'b, I: MatrixIndex>(&'b self, index: I) -> Option<MatrixView<'b, T>> {
-        self.region.try_crop(index).map(|region| MatrixView {
+    pub fn checked_view<'b, I: MatrixIndex>(&'b self, index: I) -> Option<View<'b, T>> {
+        self.region.try_crop(index).map(|region| View {
             buffer: self.buffer,
             region,
         })
     }
 }
 
-impl<'a, T: Clone> MatrixViewMut<'a, T> {
+impl<'a, T: Clone> ViewMut<'a, T> {
     pub fn as_matrix(&self) -> Matrix<T> {
         Matrix {
             vec: self.region.apply(self.buffer),
@@ -107,7 +104,7 @@ mod tests {
 
     #[test]
     fn test_index() {
-        let matrix_view = MatrixViewMut {
+        let matrix_view = ViewMut {
             buffer: &mut [1, 2, 3, 4, 5, 6],
             region: Region::from_shape(3, 2).crop((1.., ..)),
         };
@@ -120,7 +117,7 @@ mod tests {
 
     #[test]
     fn test_get() {
-        let matrix_view = MatrixViewMut {
+        let matrix_view = ViewMut {
             buffer: &mut [1, 2, 3, 4, 5, 6],
             region: Region::from_shape(3, 2).crop((1.., ..)),
         };
@@ -133,7 +130,7 @@ mod tests {
 
     #[test]
     fn test_get_none() {
-        let matrix_view = MatrixViewMut {
+        let matrix_view = ViewMut {
             buffer: &mut [1, 2, 3, 4, 5, 6],
             region: Region::from_shape(3, 2).crop((1.., ..)),
         };
@@ -145,7 +142,7 @@ mod tests {
     #[test]
     fn test_get_mut() {
         let mut buffer = [1, 2, 3, 4, 5, 6];
-        let mut matrix_view = MatrixViewMut {
+        let mut matrix_view = ViewMut {
             buffer: &mut buffer,
             region: Region::from_shape(3, 2).crop((1.., ..)),
         };
@@ -157,7 +154,7 @@ mod tests {
 
     #[test]
     fn test_as_matrix() {
-        let matrix_view = MatrixViewMut {
+        let matrix_view = ViewMut {
             buffer: &mut [1, 2, 3, 4, 5, 6],
             region: Region::from_shape(3, 2).crop((1.., ..)),
         };

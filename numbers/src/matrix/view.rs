@@ -6,13 +6,12 @@ use crate::{
 };
 
 #[derive(PartialEq)]
-pub struct MatrixView<'a, T> {
-    // resources from the underlying matrix
+pub struct View<'a, T> {
     pub(crate) buffer: &'a [T],
     pub(crate) region: Region,
 }
 
-impl<'a, T> Index<(usize, usize)> for MatrixView<'a, T> {
+impl<'a, T> Index<(usize, usize)> for View<'a, T> {
     type Output = T;
 
     fn index(&self, (i, j): (usize, usize)) -> &Self::Output {
@@ -20,7 +19,7 @@ impl<'a, T> Index<(usize, usize)> for MatrixView<'a, T> {
     }
 }
 
-impl<'a, T> MatrixView<'a, T> {
+impl<'a, T> View<'a, T> {
     pub fn get(&self, i: usize, j: usize) -> Option<&T> {
         if self.region.in_bounds(i, j) {
             Some(&self[(i, j)])
@@ -29,24 +28,24 @@ impl<'a, T> MatrixView<'a, T> {
         }
     }
 
-    pub fn view<'b, I: MatrixIndex>(&'b self, index: I) -> MatrixView<'b, T> {
+    pub fn view<'b, I: MatrixIndex>(&'b self, index: I) -> View<'b, T> {
         let subregion = self.region.crop(index);
 
-        MatrixView {
+        View {
             buffer: self.buffer,
             region: subregion,
         }
     }
 
-    pub fn checked_view<'b, I: MatrixIndex>(&'b self, index: I) -> Option<MatrixView<'b, T>> {
-        self.region.try_crop(index).map(|subregion| MatrixView {
+    pub fn checked_view<'b, I: MatrixIndex>(&'b self, index: I) -> Option<View<'b, T>> {
+        self.region.try_crop(index).map(|subregion| View {
             buffer: self.buffer,
             region: subregion,
         })
     }
 }
 
-impl<'a, T: Clone> MatrixView<'a, T> {
+impl<'a, T: Clone> View<'a, T> {
     pub fn as_matrix(&self) -> Matrix<T> {
         Matrix {
             vec: self.region.apply(self.buffer),
@@ -67,7 +66,7 @@ mod tests {
     fn test_index() {
         let region = Region::from_shape(3, 2).crop((1.., ..));
 
-        let matrix_view = MatrixView {
+        let matrix_view = View {
             buffer: &[1, 2, 3, 4, 5, 6],
             region,
         };
@@ -82,7 +81,7 @@ mod tests {
     fn test_get() {
         let region = Region::from_shape(3, 2).crop((1.., ..));
 
-        let matrix_view = MatrixView {
+        let matrix_view = View {
             buffer: &[1, 2, 3, 4, 5, 6],
             region,
         };
@@ -97,7 +96,7 @@ mod tests {
     fn test_get_none() {
         let region = Region::from_shape(3, 2).crop((1.., ..));
 
-        let matrix_view = MatrixView {
+        let matrix_view = View {
             buffer: &[1, 2, 3, 4, 5, 6],
             region,
         };
@@ -110,7 +109,7 @@ mod tests {
     fn test_as_matrix() {
         let region = Region::from_shape(3, 2).crop((1.., ..));
 
-        let matrix_view = MatrixView {
+        let matrix_view = View {
             buffer: &[1, 2, 3, 4, 5, 6],
             region,
         };
