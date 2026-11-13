@@ -1,114 +1,56 @@
 use std::ops::Index;
 
-use crate::{Matrix, matrix::MatrixIndex};
+use crate::{
+    Matrix,
+    matrix::{MatrixIndex, region::Region},
+};
 
 #[derive(PartialEq)]
 pub struct MatrixView<'a, T> {
     // resources from the underlying matrix
     pub(crate) buffer: &'a [T],
-    pub(crate) stride: usize,
-    // specs of the particular view
-    pub(crate) offset: usize, // buffer[offset] is the first element of the view
-    pub(crate) rows: usize,
-    pub(crate) columns: usize,
+    pub(crate) region: Region,
 }
 
 impl<'a, T> Index<(usize, usize)> for MatrixView<'a, T> {
     type Output = T;
 
     fn index(&self, (i, j): (usize, usize)) -> &Self::Output {
-        &self.buffer[self.offset + (self.stride * i) + j]
+        &self.buffer[self.region.buffer_index(i, j)]
     }
 }
 
 impl<'a, T> MatrixView<'a, T> {
     pub fn get(&self, i: usize, j: usize) -> Option<&T> {
-        if i >= self.rows || j >= self.columns {
-            return None;
+        if self.region.in_bounds(i, j) {
+            Some(&self[(i, j)])
+        } else {
+            None
         }
-
-        Some(&self[(i, j)])
     }
 
     pub fn view<'b, I: MatrixIndex>(&'b self, index: I) -> MatrixView<'b, T> {
-        let view_shape = (self.rows, self.columns);
-        let offset = index.offset(view_shape);
-        let rows = index.rows(view_shape);
-        let columns = index.columns(view_shape);
-
-        // calculate the number of rows + columns traversed
-        // with respect to the view's shape
-        let offset_rows = offset / self.columns;
-        let offset_columns = offset % self.columns;
-
-        // offset of the new view with respect to the owning matrix
-        let matrix_offset = self.offset + offset_rows * self.stride + offset_columns;
+        let subregion = self.region.crop(index);
 
         MatrixView {
             buffer: self.buffer,
-            stride: self.stride,
-            offset: matrix_offset,
-            rows,
-            columns,
+            region: subregion,
         }
     }
 
     pub fn checked_view<'b, I: MatrixIndex>(&'b self, index: I) -> Option<MatrixView<'b, T>> {
-        let view_shape = (self.rows, self.columns);
-        let rows = index.rows(view_shape);
-        let columns = index.columns(view_shape);
-
-        if rows > self.rows || columns > self.columns {
-            return None;
-        }
-
-        let offset = index.offset(view_shape);
-
-        let offset_rows = offset / self.columns;
-        let offset_columns = offset % self.columns;
-
-        if rows + offset_rows > self.rows || columns + offset_columns > self.columns {
-            return None;
-        }
-
-        let matrix_offset = self.offset + offset_rows * self.stride + offset_columns;
-
-        Some(MatrixView {
+        self.region.try_crop(index).map(|subregion| MatrixView {
             buffer: self.buffer,
-            stride: self.stride,
-            offset: matrix_offset,
-            rows,
-            columns,
+            region: subregion,
         })
     }
 }
 
 impl<'a, T: Clone> MatrixView<'a, T> {
     pub fn as_matrix(&self) -> Matrix<T> {
-        let start_row = self.offset / self.stride;
-        let start_column = self.offset % self.stride;
-
-        let mut vec = Vec::with_capacity(self.rows * self.columns);
-        for (idx, value) in self.buffer.iter().enumerate() {
-            if idx < self.offset {
-                continue;
-            }
-
-            let i = idx / self.stride;
-            let j = idx % self.stride;
-
-            if i >= start_row
-                && i < start_row + self.rows
-                && j >= start_column
-                && j < start_column + self.columns
-            {
-                vec.push(value.clone());
-            }
-        }
-
         Matrix {
-            vec,
-            stride: self.columns,
+            vec: self.region.apply(self.buffer),
+            stride: self.region.shape().1,
         }
     }
 
@@ -123,12 +65,11 @@ mod tests {
 
     #[test]
     fn test_index() {
+        let region = Region::from_shape(3, 2).crop((1.., ..));
+
         let matrix_view = MatrixView {
             buffer: &[1, 2, 3, 4, 5, 6],
-            stride: 2,
-            offset: 2,
-            rows: 2,
-            columns: 2,
+            region,
         };
 
         let expected = 6;
@@ -139,12 +80,11 @@ mod tests {
 
     #[test]
     fn test_get() {
+        let region = Region::from_shape(3, 2).crop((1.., ..));
+
         let matrix_view = MatrixView {
             buffer: &[1, 2, 3, 4, 5, 6],
-            stride: 2,
-            offset: 2,
-            rows: 2,
-            columns: 2,
+            region,
         };
 
         let expected = &6;
@@ -155,12 +95,11 @@ mod tests {
 
     #[test]
     fn test_get_none() {
+        let region = Region::from_shape(3, 2).crop((1.., ..));
+
         let matrix_view = MatrixView {
             buffer: &[1, 2, 3, 4, 5, 6],
-            stride: 2,
-            offset: 2,
-            rows: 2,
-            columns: 2,
+            region,
         };
 
         let actual = matrix_view.get(1, 2);
@@ -169,12 +108,11 @@ mod tests {
 
     #[test]
     fn test_as_matrix() {
+        let region = Region::from_shape(3, 2).crop((1.., ..));
+
         let matrix_view = MatrixView {
             buffer: &[1, 2, 3, 4, 5, 6],
-            stride: 2,
-            offset: 2,
-            rows: 2,
-            columns: 2,
+            region,
         };
 
         let expected = Matrix::try_from_iter([[3, 4], [5, 6]]).unwrap();

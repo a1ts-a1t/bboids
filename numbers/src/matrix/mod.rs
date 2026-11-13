@@ -1,5 +1,6 @@
 mod arith;
 mod index;
+mod region;
 mod view;
 mod view_mut;
 
@@ -14,7 +15,7 @@ use std::{
 
 use num::{One, Zero};
 
-use crate::{Vector, err::ValueError};
+use crate::{Vector, err::ValueError, matrix::region::Region};
 
 #[derive(PartialEq, Debug)]
 pub struct Matrix<T> {
@@ -65,44 +66,32 @@ impl<T> Matrix<T> {
     }
 
     pub fn view<'a, I: MatrixIndex>(&'a self, index: I) -> MatrixView<'a, T> {
-        let shape = self.shape();
+        let (m, n) = self.shape();
+        let region = Region::from_shape(m, n);
+
         MatrixView {
             buffer: &self.vec,
-            stride: self.stride,
-            offset: index.offset(shape),
-            rows: index.rows(shape),
-            columns: index.columns(shape),
+            region: region.crop(index),
         }
     }
 
     pub fn view_mut<'a, I: MatrixIndex>(&'a mut self, index: I) -> MatrixViewMut<'a, T> {
-        let shape = self.shape();
+        let (m, n) = self.shape();
+        let region = Region::from_shape(m, n).crop(index);
+
         MatrixViewMut {
             buffer: &mut self.vec,
-            stride: self.stride,
-            offset: index.offset(shape),
-            rows: index.rows(shape),
-            columns: index.columns(shape),
+            region,
         }
     }
 
     pub fn checked_view<'a, I: MatrixIndex>(&'a self, index: I) -> Option<MatrixView<'a, T>> {
-        let shape = self.shape();
-        let offset = index.offset(shape);
-        let rows = index.rows(shape);
-        let columns = index.columns(shape);
+        let (m, n) = self.shape();
+        let region = Region::from_shape(m, n);
 
-        let (m, n) = shape;
-        if rows > m || columns > n || offset >= m * n {
-            return None;
-        }
-
-        Some(MatrixView {
+        region.try_crop(index).map(|view_region| MatrixView {
             buffer: &self.vec,
-            stride: self.stride,
-            offset,
-            rows,
-            columns,
+            region: view_region,
         })
     }
 
@@ -110,40 +99,22 @@ impl<T> Matrix<T> {
         &'a mut self,
         index: I,
     ) -> Option<MatrixViewMut<'a, T>> {
-        let shape = self.shape();
-        let offset = index.offset(shape);
-        let rows = index.rows(shape);
-        let columns = index.columns(shape);
+        let (m, n) = self.shape();
 
-        let (m, n) = shape;
-        if rows > m || columns > n || offset >= m * n {
-            return None;
-        }
-
-        Some(MatrixViewMut {
-            buffer: &mut self.vec,
-            stride: self.stride,
-            offset,
-            rows,
-            columns,
-        })
+        Region::from_shape(m, n)
+            .try_crop(index)
+            .map(|region| MatrixViewMut {
+                buffer: &mut self.vec,
+                region,
+            })
     }
 
     pub fn row<'a>(&'a self, i: usize) -> MatrixView<'a, T> {
-        let (_, n) = self.shape();
-        let offset = i * self.stride;
-
-        MatrixView {
-            buffer: &self.vec,
-            stride: self.stride,
-            offset,
-            rows: 1,
-            columns: n,
-        }
+        self.view((i..=i, ..))
     }
 
-    pub fn column(&self, j: usize) -> impl Iterator<Item = &T> {
-        self.vec.iter().skip(j).step_by(self.stride)
+    pub fn column<'a>(&'a self, j: usize) -> MatrixView<'a, T> {
+        self.view((.., j..=j))
     }
 }
 
@@ -394,5 +365,25 @@ mod tests {
         let actual = a.tril(-1);
 
         assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn test_checked_view() {
+        let matrix = Matrix::try_from_iter([[1, 2, 3], [4, 5, 6], [7, 8, 9]]).unwrap();
+        let view = matrix.checked_view((.., ..)).unwrap();
+
+        assert_eq!(view.into_matrix(), matrix);
+    }
+
+    #[test]
+    fn test_checked_view_mut() {
+        let mut matrix = Matrix::try_from_iter([[1, 2, 3], [4, 5, 6], [7, 8, 9]]).unwrap();
+
+        assert!(matrix.checked_view_mut((0..4, ..)).is_none());
+
+        let mut view = matrix.checked_view_mut((0.., 1..)).unwrap();
+        view[(0, 0)] = 0;
+
+        assert_eq!(matrix[(0, 1)], 0);
     }
 }

@@ -21,28 +21,30 @@ pub trait MatrixIndex {
     }
 }
 
-impl<R: RangeBounds<usize>> MatrixIndex for (R, R) {
+impl<RowRange: RangeBounds<usize>, ColumnRange: RangeBounds<usize>> MatrixIndex
+    for (RowRange, ColumnRange)
+{
     fn bounds(&self, (m, n): (usize, usize)) -> ((usize, usize), (usize, usize)) {
         let row_start = match self.0.start_bound() {
             std::ops::Bound::Included(start) => *start,
-            std::ops::Bound::Excluded(start) => start + 1,
+            std::ops::Bound::Excluded(start) => start.saturating_add(1),
             std::ops::Bound::Unbounded => 0,
         };
 
         let row_end = match self.0.end_bound() {
-            std::ops::Bound::Included(end) => end + 1,
+            std::ops::Bound::Included(end) => end.saturating_add(1),
             std::ops::Bound::Excluded(end) => *end,
             std::ops::Bound::Unbounded => m,
         };
 
         let column_start = match self.1.start_bound() {
             std::ops::Bound::Included(start) => *start,
-            std::ops::Bound::Excluded(start) => start + 1,
+            std::ops::Bound::Excluded(start) => start.saturating_add(1),
             std::ops::Bound::Unbounded => 0,
         };
 
         let column_end = match self.1.end_bound() {
-            std::ops::Bound::Included(end) => end + 1,
+            std::ops::Bound::Included(end) => end.saturating_add(1),
             std::ops::Bound::Excluded(end) => *end,
             std::ops::Bound::Unbounded => n,
         };
