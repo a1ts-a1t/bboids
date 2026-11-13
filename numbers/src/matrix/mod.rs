@@ -1,9 +1,11 @@
 mod arith;
 mod index;
 mod view;
+mod view_mut;
 
 pub use index::MatrixIndex;
 pub use view::MatrixView;
+pub use view_mut::MatrixViewMut;
 
 use std::{
     iter,
@@ -73,6 +75,17 @@ impl<T> Matrix<T> {
         }
     }
 
+    pub fn view_mut<'a, I: MatrixIndex>(&'a mut self, index: I) -> MatrixViewMut<'a, T> {
+        let shape = self.shape();
+        MatrixViewMut {
+            buffer: &mut self.vec,
+            stride: self.stride,
+            offset: index.offset(shape),
+            rows: index.rows(shape),
+            columns: index.columns(shape),
+        }
+    }
+
     pub fn checked_view<'a, I: MatrixIndex>(&'a self, index: I) -> Option<MatrixView<'a, T>> {
         let shape = self.shape();
         let offset = index.offset(shape);
@@ -86,6 +99,29 @@ impl<T> Matrix<T> {
 
         Some(MatrixView {
             buffer: &self.vec,
+            stride: self.stride,
+            offset,
+            rows,
+            columns,
+        })
+    }
+
+    pub fn checked_view_mut<'a, I: MatrixIndex>(
+        &'a mut self,
+        index: I,
+    ) -> Option<MatrixViewMut<'a, T>> {
+        let shape = self.shape();
+        let offset = index.offset(shape);
+        let rows = index.rows(shape);
+        let columns = index.columns(shape);
+
+        let (m, n) = shape;
+        if rows > m || columns > n || offset >= m * n {
+            return None;
+        }
+
+        Some(MatrixViewMut {
+            buffer: &mut self.vec,
             stride: self.stride,
             offset,
             rows,
