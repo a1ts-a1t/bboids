@@ -26,6 +26,10 @@ impl<'a, T> Index<(usize, usize)> for ViewMut<'a, T> {
 }
 
 impl<'a, T> ViewMut<'a, T> {
+    pub fn shape(&self) -> (usize, usize) {
+        self.region.shape()
+    }
+
     pub fn get(&self, i: usize, j: usize) -> Option<&T> {
         if self.region.in_bounds(i, j) {
             Some(&self[(i, j)])
@@ -81,6 +85,70 @@ impl<'a, T> ViewMut<'a, T> {
         self.region.try_crop(index).map(|region| View {
             buffer: self.buffer,
             region,
+        })
+    }
+
+    pub fn row<'b>(&'b self, i: usize) -> View<'b, T> {
+        let row_region = self.region.crop_row(i);
+
+        View {
+            buffer: self.buffer,
+            region: row_region,
+        }
+    }
+
+    pub fn checked_row<'b>(&'b self, i: usize) -> Option<View<'b, T>> {
+        self.region.try_crop_row(i).map(|subregion| View {
+            buffer: self.buffer,
+            region: subregion,
+        })
+    }
+
+    pub fn row_mut<'b>(&'b mut self, i: usize) -> ViewMut<'b, T> {
+        let row_region = self.region.crop_row(i);
+
+        ViewMut {
+            buffer: self.buffer,
+            region: row_region,
+        }
+    }
+
+    pub fn checked_row_mut<'b>(&'b mut self, i: usize) -> Option<ViewMut<'b, T>> {
+        self.region.try_crop_row(i).map(|subregion| ViewMut {
+            buffer: self.buffer,
+            region: subregion,
+        })
+    }
+
+    pub fn column<'b>(&'b self, j: usize) -> View<'b, T> {
+        let column_region = self.region.crop_column(j);
+
+        View {
+            buffer: self.buffer,
+            region: column_region,
+        }
+    }
+
+    pub fn checked_column<'b>(&'b self, j: usize) -> Option<View<'b, T>> {
+        self.region.try_crop_column(j).map(|subregion| View {
+            buffer: self.buffer,
+            region: subregion,
+        })
+    }
+
+    pub fn column_mut<'b>(&'b mut self, i: usize) -> ViewMut<'b, T> {
+        let column_region = self.region.crop_column(i);
+
+        ViewMut {
+            buffer: self.buffer,
+            region: column_region,
+        }
+    }
+
+    pub fn checked_column_mut<'b>(&'b mut self, i: usize) -> Option<ViewMut<'b, T>> {
+        self.region.try_crop_column(i).map(|subregion| ViewMut {
+            buffer: self.buffer,
+            region: subregion,
         })
     }
 }

@@ -31,15 +31,9 @@ impl Region {
     }
 
     pub fn crop<I: MatrixIndex>(&self, index: I) -> Self {
-        let bounds = index.bounds(self.shape());
-
         match self.try_crop(index) {
             Some(region) => region,
-            None => panic!(
-                "crop out of bounds: {:?} does not fit in region of shape {:?}",
-                bounds,
-                self.shape()
-            ),
+            None => panic!(),
         }
     }
 
@@ -60,6 +54,22 @@ impl Region {
             rows: row_end - row_start,
             columns: column_end - column_start,
         })
+    }
+
+    pub fn try_crop_row(&self, i: usize) -> Option<Self> {
+        self.try_crop((i..i + 1, ..))
+    }
+
+    pub fn try_crop_column(&self, j: usize) -> Option<Self> {
+        self.try_crop((.., j..j + 1))
+    }
+
+    pub fn crop_row(&self, i: usize) -> Self {
+        self.crop((i..i + 1, ..))
+    }
+
+    pub fn crop_column(&self, j: usize) -> Self {
+        self.crop((.., j..j + 1))
     }
 
     pub fn apply<T: Clone>(&self, buffer: &[T]) -> Vec<T> {
