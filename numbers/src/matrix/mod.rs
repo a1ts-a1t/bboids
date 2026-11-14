@@ -75,6 +75,10 @@ impl<T> Matrix<T> {
         }
     }
 
+    pub fn as_view<'a>(&'a self) -> View<'a, T> {
+        self.view((.., ..))
+    }
+
     pub fn view_mut<'a, I: MatrixIndex>(&'a mut self, index: I) -> ViewMut<'a, T> {
         let (m, n) = self.shape();
         let region = Region::from_shape(m, n).crop(index);
@@ -83,6 +87,10 @@ impl<T> Matrix<T> {
             buffer: &mut self.vec,
             region,
         }
+    }
+
+    pub fn as_view_mut<'a>(&'a mut self) -> ViewMut<'a, T> {
+        self.view_mut((.., ..))
     }
 
     pub fn checked_view<'a, I: MatrixIndex>(&'a self, index: I) -> Option<View<'a, T>> {
@@ -262,6 +270,18 @@ impl<T> Matrix<T> {
         }
 
         Ok(Matrix { vec, stride })
+    }
+}
+
+impl<T: PartialOrd> Matrix<T> {
+    pub fn argmax(&self) -> Option<(usize, usize)> {
+        let vec_index = self
+            .vec
+            .iter()
+            .enumerate()
+            .reduce(|acc, e| if e.1 > acc.1 { e } else { acc });
+
+        vec_index.map(|(index, _)| (index / self.stride, index % self.stride))
     }
 }
 

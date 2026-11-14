@@ -166,6 +166,27 @@ impl<'a, T: Clone> ViewMut<'a, T> {
     }
 }
 
+impl<'a, T: PartialOrd> ViewMut<'a, T> {
+    pub fn argmax(&self) -> Option<(usize, usize)> {
+        let mut max: Option<(usize, &T)> = None;
+        for buffer_index in self.region.buffer_index_iter() {
+            match max {
+                Some((_, val)) => {
+                    let new_val = &self.buffer[buffer_index];
+                    if new_val > val {
+                        max = Some((buffer_index, new_val));
+                    };
+                }
+                None => {
+                    max = Some((buffer_index, &self.buffer[buffer_index]));
+                }
+            };
+        }
+
+        max.map(|(buffer_index, _)| self.region.region_index(buffer_index))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -254,10 +275,13 @@ mod tests {
     }
 
     #[test]
-    fn test_checked_view_mut_full_range() {
-        let mut matrix = Matrix::try_from_iter([[1, 2], [3, 4]]).unwrap();
-        let mut view = matrix.view_mut((.., ..));
+    fn test_argmax() {
+        let mut matrix = Matrix::try_from_iter([[1, 2, 3], [4, 5, 6], [7, 8, 9]]).unwrap();
+        let view = matrix.view_mut((.., ..));
 
-        assert!(view.checked_view_mut((.., ..)).is_some());
+        let expected = (2, 2);
+        let actual = view.argmax().unwrap();
+
+        assert_eq!(expected, actual);
     }
 }

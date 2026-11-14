@@ -1,3 +1,5 @@
+use std::iter;
+
 use crate::matrix::MatrixIndex;
 
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -24,6 +26,11 @@ impl Region {
 
     pub fn buffer_index(&self, i: usize, j: usize) -> usize {
         self.offset + (self.stride * i) + j
+    }
+
+    pub fn region_index(&self, buffer_index: usize) -> (usize, usize) {
+        let region_offset = buffer_index - self.offset;
+        (region_offset / self.stride, region_offset % self.stride)
     }
 
     pub fn in_bounds(&self, i: usize, j: usize) -> bool {
@@ -72,13 +79,26 @@ impl Region {
         self.crop((.., j..j + 1))
     }
 
+    pub fn buffer_index_iter(&self) -> impl Iterator<Item = usize> {
+        iter::successors(Some(self.buffer_index(0, 0)), |buffer_index| {
+            let (i, j) = self.region_index(*buffer_index);
+            if i + 1 == self.rows && j + 1 == self.columns {
+                return None;
+            }
+
+            if j + 1 == self.columns {
+                return Some(self.buffer_index(i + 1, 0));
+            }
+
+            Some(self.buffer_index(i, j + 1))
+        })
+    }
+
     pub fn apply<T: Clone>(&self, buffer: &[T]) -> Vec<T> {
         let mut vec = Vec::with_capacity(self.rows * self.columns);
 
-        for i in 0..self.rows {
-            for j in 0..self.columns {
-                vec.push(buffer[self.buffer_index(i, j)].clone());
-            }
+        for buffer_index in self.buffer_index_iter() {
+            vec.push(buffer[buffer_index].clone());
         }
 
         vec
