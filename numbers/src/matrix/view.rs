@@ -2,7 +2,7 @@ use std::ops::Index;
 
 use crate::{
     Matrix,
-    matrix::{MatrixIndex, region::Region},
+    matrix::{MatrixIndex, column::Column, region::Region},
 };
 
 #[derive(PartialEq)]
@@ -64,19 +64,30 @@ impl<'a, T> View<'a, T> {
         })
     }
 
-    pub fn column<'b>(&'b self, j: usize) -> View<'b, T> {
+    pub fn column<'b>(&'b self, j: usize) -> Column<'b, T> {
         let column_region = self.region.crop_column(j);
 
-        View {
+        Column(View {
             buffer: self.buffer,
             region: column_region,
-        }
+        })
     }
 
-    pub fn checked_column<'b>(&'b self, j: usize) -> Option<View<'b, T>> {
-        self.region.try_crop_column(j).map(|subregion| View {
-            buffer: self.buffer,
-            region: subregion,
+    pub fn checked_column<'b>(&'b self, j: usize) -> Option<Column<'b, T>> {
+        self.region.try_crop_column(j).map(|subregion| {
+            Column(View {
+                buffer: self.buffer,
+                region: subregion,
+            })
+        })
+    }
+
+    pub fn enumerate(&self) -> impl Iterator<Item = ((usize, usize), &T)> {
+        self.region.buffer_index_iter().map(|buffer_index| {
+            (
+                self.region.region_index(buffer_index),
+                &self.buffer[buffer_index],
+            )
         })
     }
 }

@@ -1,9 +1,11 @@
 mod arith;
+mod column;
 mod index;
 mod region;
 mod view;
 mod view_mut;
 
+pub use column::Column;
 pub use index::MatrixIndex;
 pub use view::View;
 pub use view_mut::ViewMut;
@@ -118,8 +120,8 @@ impl<T> Matrix<T> {
         self.view((i..=i, ..))
     }
 
-    pub fn column<'a>(&'a self, j: usize) -> View<'a, T> {
-        self.view((.., j..=j))
+    pub fn column<'a>(&'a self, j: usize) -> Column<'a, T> {
+        Column(self.view((.., j..=j)))
     }
 }
 

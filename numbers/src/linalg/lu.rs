@@ -1,15 +1,29 @@
-use crate::{
-    Matrix, Vector,
-    arith::{OrderedScalar, Scalar},
-    err::LinAlgError,
-    matrix::ViewMut,
-};
+use crate::arith::{Magnitude, Scalar};
+use crate::matrix::Column;
+use crate::matrix::ViewMut;
 
-// TODO
+pub trait PivotSearch: Sized {
+    fn pivot_row(column: &Column<Self>) -> Option<usize>;
+}
+
+impl<T: Magnitude> PivotSearch for T {
+    fn pivot_row(column: &Column<Self>) -> Option<usize> {
+        column
+            .enumerate()
+            .map(|(i, ele)| (i, ele.abs()))
+            .reduce(|acc, (i, magnitude)| {
+                if magnitude > acc.1 {
+                    (i, magnitude)
+                } else {
+                    acc
+                }
+            })
+            .map(|(i, _)| i)
+    }
+}
+
 // this is taken directly from dgetrf2
-// https://netlib.org/lapack/explore-html/d8/d2f/group__getrf2_gaebbbe6a533dfea4454123e0553bd3575.html
-// we probably want to make this more... rusty
-enum LuInfo {
+pub enum LuInfo {
     Ok,
     ZeroValue(usize),
 }
@@ -17,7 +31,9 @@ enum LuInfo {
 /// returns the pivots if successful
 /// copying off of dgetrf2
 /// https://netlib.org/lapack/explore-html/d8/d2f/group__getrf2_gaebbbe6a533dfea4454123e0553bd3575.html
-fn lu_factor_mut<T: OrderedScalar + Clone>(a: &mut ViewMut<T>) -> (Vec<usize>, LuInfo) {
+pub(crate) fn lu_factor_mut<T: Scalar + PivotSearch + Clone>(
+    a: &mut ViewMut<T>,
+) -> (Vec<usize>, LuInfo) {
     let (m, n) = a.shape();
 
     if m == 0 || n == 0 {
@@ -34,7 +50,7 @@ fn lu_factor_mut<T: OrderedScalar + Clone>(a: &mut ViewMut<T>) -> (Vec<usize>, L
     }
 
     if n == 1 {
-        let (argmax_index, _) = a.column(0).argmax().unwrap();
+        let argmax_index = T::pivot_row(&a.column(0)).unwrap();
         let ipiv = [argmax_index].to_vec();
 
         if a[(argmax_index, 0)] == T::zero() {
@@ -45,7 +61,6 @@ fn lu_factor_mut<T: OrderedScalar + Clone>(a: &mut ViewMut<T>) -> (Vec<usize>, L
             a.swap((0, 0), (argmax_index, 0));
         }
 
-        // TODO: is there any way to do this without clone?
         let max = a[(0, 0)].clone();
         for i in 1..m {
             // max will always be non zero. this is the condition checked above
@@ -79,7 +94,6 @@ fn lu_factor_mut<T: OrderedScalar + Clone>(a: &mut ViewMut<T>) -> (Vec<usize>, L
 
     // find X where a11 * X = a12
     // and replace a12 with X
-    // resolving into a matrix?
     for j in 0..n2 {
         for k in 0..n1 {
             let bkj = a[(k, n1 + j)].clone();
@@ -115,42 +129,14 @@ fn lu_factor_mut<T: OrderedScalar + Clone>(a: &mut ViewMut<T>) -> (Vec<usize>, L
         _ => LuInfo::Ok,
     };
 
-    for i in n1..min_dimension {
-        ipiv[i] += n1;
+    for pivot in ipiv.iter_mut().take(min_dimension).skip(n1) {
+        *pivot += n1;
     }
 
     let mut a1 = a.view_mut((.., ..n1));
-    for i in n1..min_dimension {
-        let idx = ipiv[i];
-        a1.swap_rows(i, idx);
+    for (i, idx) in ipiv.iter().enumerate().take(min_dimension).skip(n1) {
+        a1.swap_rows(i, *idx);
     }
 
     (ipiv, info)
-}
-
-pub fn lu<T: Scalar + Clone>(
-    a: Matrix<T>,
-) -> Result<(Matrix<T>, Matrix<T>, Matrix<T>), LinAlgError> {
-    todo!()
-}
-
-pub fn solve<T: OrderedScalar + Clone>(
-    a: Matrix<T>,
-    b: Vector<T>,
-) -> Result<Vector<T>, LinAlgError> {
-    if !a.is_square() {
-        return Err(LinAlgError::IncompatibleShape);
-    }
-
-    let (n, _) = a.shape();
-    if n == 0 || n != b.shape() {
-        return Err(LinAlgError::IncompatibleShape);
-    }
-
-    let mut lu = a.clone();
-    let mut lu_view = lu.as_view_mut();
-
-    lu_factor_mut(&mut lu_view);
-
-    todo!()
 }

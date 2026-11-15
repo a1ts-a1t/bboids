@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     Matrix,
-    matrix::{MatrixIndex, View, region::Region},
+    matrix::{MatrixIndex, View, column::Column, region::Region},
 };
 
 #[derive(PartialEq)]
@@ -107,51 +107,21 @@ impl<'a, T> ViewMut<'a, T> {
         })
     }
 
-    pub fn row_mut<'b>(&'b mut self, i: usize) -> ViewMut<'b, T> {
-        let row_region = self.region.crop_row(i);
-
-        ViewMut {
-            buffer: self.buffer,
-            region: row_region,
-        }
-    }
-
-    pub fn checked_row_mut<'b>(&'b mut self, i: usize) -> Option<ViewMut<'b, T>> {
-        self.region.try_crop_row(i).map(|subregion| ViewMut {
-            buffer: self.buffer,
-            region: subregion,
-        })
-    }
-
-    pub fn column<'b>(&'b self, j: usize) -> View<'b, T> {
+    pub fn column<'b>(&'b self, j: usize) -> Column<'b, T> {
         let column_region = self.region.crop_column(j);
 
-        View {
+        Column(View {
             buffer: self.buffer,
             region: column_region,
-        }
-    }
-
-    pub fn checked_column<'b>(&'b self, j: usize) -> Option<View<'b, T>> {
-        self.region.try_crop_column(j).map(|subregion| View {
-            buffer: self.buffer,
-            region: subregion,
         })
     }
 
-    pub fn column_mut<'b>(&'b mut self, i: usize) -> ViewMut<'b, T> {
-        let column_region = self.region.crop_column(i);
-
-        ViewMut {
-            buffer: self.buffer,
-            region: column_region,
-        }
-    }
-
-    pub fn checked_column_mut<'b>(&'b mut self, i: usize) -> Option<ViewMut<'b, T>> {
-        self.region.try_crop_column(i).map(|subregion| ViewMut {
-            buffer: self.buffer,
-            region: subregion,
+    pub fn checked_column<'b>(&'b self, j: usize) -> Option<Column<'b, T>> {
+        self.region.try_crop_column(j).map(|subregion| {
+            Column(View {
+                buffer: self.buffer,
+                region: subregion,
+            })
         })
     }
 
