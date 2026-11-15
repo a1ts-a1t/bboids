@@ -1,4 +1,7 @@
-use std::ops::{Index, IndexMut};
+use std::{
+    iter,
+    ops::{Index, IndexMut},
+};
 
 use crate::{
     Matrix,
@@ -150,6 +153,41 @@ impl<'a, T> ViewMut<'a, T> {
             buffer: self.buffer,
             region: subregion,
         })
+    }
+
+    pub fn swap(&mut self, (i1, j1): (usize, usize), (i2, j2): (usize, usize)) {
+        let buffer_index1 = self.region.buffer_index(i1, j1);
+        let buffer_index2 = self.region.buffer_index(i2, j2);
+
+        self.buffer.swap(buffer_index1, buffer_index2);
+    }
+
+    pub fn swap_rows(&mut self, i1: usize, i2: usize) {
+        let row_region1 = self.region.crop_row(i1);
+        let row_region2 = self.region.crop_row(i2);
+
+        let buffer_indices = iter::zip(
+            row_region1.buffer_index_iter(),
+            row_region2.buffer_index_iter(),
+        );
+
+        for (buffer_index1, buffer_index2) in buffer_indices {
+            self.buffer.swap(buffer_index1, buffer_index2);
+        }
+    }
+
+    pub fn swap_columns(&mut self, j1: usize, j2: usize) {
+        let column_region1 = self.region.crop_column(j1);
+        let column_region2 = self.region.crop_column(j2);
+
+        let buffer_indices = iter::zip(
+            column_region1.buffer_index_iter(),
+            column_region2.buffer_index_iter(),
+        );
+
+        for (buffer_index1, buffer_index2) in buffer_indices {
+            self.buffer.swap(buffer_index1, buffer_index2);
+        }
     }
 }
 

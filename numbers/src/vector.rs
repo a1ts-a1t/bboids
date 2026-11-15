@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::{
-    arith::{Scalar, TryAdd},
+    arith::{Magnitude, Scalar, TryAdd},
     err::LinAlgError,
 };
 
@@ -82,6 +82,12 @@ impl<T: Add<Output = T>> TryAdd for Vector<T> {
         }
 
         Ok(Vector(sum))
+    }
+}
+
+impl<T: Magnitude> Vector<T> {
+    pub fn abs(&self) -> Vector<T::Output> {
+        Vector(self.0.iter().map(|ele| ele.abs()).collect())
     }
 }
 

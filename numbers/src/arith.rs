@@ -3,7 +3,9 @@ use std::ops::{Add, Mul, Neg};
 use num::{Float, Signed, Zero};
 
 // element of a field
-pub trait Scalar: Sized + Add<Output = Self> + Mul<Output = Self> + Zero + Neg {
+pub trait Scalar:
+    Sized + Add<Output = Self> + Mul<Output = Self> + Zero + Neg<Output = Self> + PartialEq
+{
     fn inverse(&self) -> Option<Self>;
 }
 
@@ -20,9 +22,26 @@ where
     }
 }
 
-pub trait OrderedScalar: Scalar + Ord {}
+pub trait OrderedScalar: Scalar + PartialOrd {}
 
-impl<T> OrderedScalar for T where T: Scalar + Ord {}
+impl<T> OrderedScalar for T where T: Scalar + PartialOrd {}
+
+pub trait Magnitude {
+    type Output: PartialOrd;
+
+    fn abs(&self) -> Self::Output;
+}
+
+impl<T> Magnitude for T
+where
+    T: Float,
+{
+    type Output = Self;
+
+    fn abs(&self) -> Self::Output {
+        Float::abs(*self)
+    }
+}
 
 pub trait TryAdd<Rhs = Self> {
     type Error;

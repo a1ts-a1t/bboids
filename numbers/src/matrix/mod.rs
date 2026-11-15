@@ -15,7 +15,7 @@ use std::{
 
 use num::{One, Zero};
 
-use crate::{Vector, err::ValueError, matrix::region::Region};
+use crate::{Vector, arith::Magnitude, err::ValueError, matrix::region::Region};
 
 #[derive(PartialEq, Debug)]
 pub struct Matrix<T> {
@@ -282,6 +282,17 @@ impl<T: PartialOrd> Matrix<T> {
             .reduce(|acc, e| if e.1 > acc.1 { e } else { acc });
 
         vec_index.map(|(index, _)| (index / self.stride, index % self.stride))
+    }
+}
+
+impl<T: Magnitude> Matrix<T> {
+    pub fn abs(&self) -> Matrix<T::Output> {
+        let vec = self.vec.iter().map(|ele| ele.abs()).collect();
+
+        Matrix {
+            vec,
+            stride: self.stride,
+        }
     }
 }
 
