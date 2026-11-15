@@ -15,9 +15,14 @@ use std::{
     ops::{Index, IndexMut},
 };
 
-use num::{One, Zero};
+use num::{Float, One, Zero};
 
-use crate::{Vector, arith::Magnitude, err::ValueError, matrix::region::Region};
+use crate::{
+    Vector,
+    arith::{Magnitude, Scalar},
+    err::ValueError,
+    matrix::region::Region,
+};
 
 #[derive(PartialEq, Debug)]
 pub struct Matrix<T> {
@@ -295,6 +300,29 @@ impl<T: Magnitude> Matrix<T> {
             vec,
             stride: self.stride,
         }
+    }
+}
+
+impl<T> Matrix<T>
+where
+    T: Magnitude,
+    T::Output: Scalar,
+{
+    pub fn norm_squared(&self) -> T::Output {
+        self.vec
+            .iter()
+            .map(|val| val.abs() * val.abs())
+            .fold(T::Output::zero(), |acc, val| acc + val)
+    }
+}
+
+impl<T> Matrix<T>
+where
+    T: Magnitude,
+    T::Output: Scalar + Float,
+{
+    pub fn norm(&self) -> T::Output {
+        self.norm_squared().sqrt()
     }
 }
 
