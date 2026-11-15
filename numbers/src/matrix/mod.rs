@@ -12,6 +12,12 @@ pub use row::Row;
 pub use view::View;
 pub use view_mut::ViewMut;
 
+#[cfg(feature = "rand")]
+use rand::{
+    Rng, RngExt,
+    distr::{Distribution, StandardUniform},
+};
+
 use std::{
     iter,
     ops::{Index, IndexMut},
@@ -24,6 +30,7 @@ use crate::{
     arith::{Magnitude, Scalar},
     err::ValueError,
     matrix::region::Region,
+    numerical::{Tolerance, is_close},
 };
 
 #[derive(PartialEq, Debug)]
@@ -130,6 +137,10 @@ impl<T> Matrix<T> {
     pub fn column<'a>(&'a self, j: usize) -> Column<'a, T> {
         Column(self.view((.., j..=j)))
     }
+
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.vec.iter()
+    }
 }
 
 impl<T: Clone> Clone for Matrix<T> {
@@ -172,6 +183,10 @@ impl<T: Clone> Matrix<T> {
         // i'm not gonna bother but further reading here
         // https://en.wikipedia.org/wiki/In-place_matrix_transposition#Algorithms
         *self = self.transposed();
+    }
+
+    pub fn submatrix<I: MatrixIndex>(&self, index: I) -> Matrix<T> {
+        self.view(index).into_matrix()
     }
 }
 
@@ -316,6 +331,16 @@ where
             .map(|val| val.abs() * val.abs())
             .fold(T::Output::zero(), |acc, val| acc + val)
     }
+
+    pub fn max_norm(&self) -> T::Output {
+        self.vec
+            .iter()
+            .map(|val| val.abs())
+            .fold(
+                T::Output::zero(),
+                |acc, val| if val > acc { val } else { acc },
+            )
+    }
 }
 
 impl<T> Matrix<T>
@@ -325,6 +350,39 @@ where
 {
     pub fn norm(&self) -> T::Output {
         self.norm_squared().sqrt()
+    }
+}
+
+impl<T: Scalar + Magnitude> Matrix<T>
+where
+    // TODO: this is just to support passing in one tolerance
+    // for all comparisons below (tolerance.clone())
+    // is this really necessary?
+    <T as Magnitude>::Output: Clone,
+{
+    pub fn is_close(
+        a: Matrix<T>,
+        b: Matrix<T>,
+        tolerance: Tolerance<<T as Magnitude>::Output>,
+    ) -> bool {
+        if a.shape() != b.shape() {
+            return false;
+        }
+
+        iter::zip(a.vec, b.vec).all(|(a, b)| is_close(a, b, tolerance.clone()))
+    }
+}
+
+#[cfg(feature = "rand")]
+impl<T> Matrix<T>
+where
+    StandardUniform: Distribution<T>,
+{
+    pub fn random<R: Rng + ?Sized>(rng: &mut R, m: usize, n: usize) -> Self {
+        let vec = iter::repeat_with(|| rng.random::<T>())
+            .take(m * n)
+            .collect();
+        Self { vec, stride: n }
     }
 }
 

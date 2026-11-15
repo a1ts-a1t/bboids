@@ -4,8 +4,10 @@ use crate::{
     Matrix, Vector,
     arith::Scalar,
     err::LinAlgError,
-    linalg::lu::{PivotSearch, lu_factor_mut},
+    linalg::lu::{PivotSearch, lu_driver},
 };
+
+pub use crate::linalg::lu::lu;
 
 pub fn solve<T: Scalar + PivotSearch + Clone>(
     a: Matrix<T>,
@@ -23,7 +25,7 @@ pub fn solve<T: Scalar + PivotSearch + Clone>(
     let mut lu = a.clone();
     let mut lu_view = lu.as_view_mut();
 
-    lu_factor_mut(&mut lu_view);
+    lu_driver(&mut lu_view);
 
     todo!()
 }

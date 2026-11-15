@@ -5,3 +5,7 @@ edition = "2024"
 
 [dependencies]
 num = "0.4.3"
+rand = { version = "0.10.4", optional = true }
+
+[features]
+rand = ["dep:rand"]

@@ -1,5 +1,6 @@
 use crate::arith::{Magnitude, Scalar};
 
+#[derive(Clone, Copy)]
 pub struct Tolerance<T> {
     pub(crate) relative: T,
     pub(crate) absolute: T,

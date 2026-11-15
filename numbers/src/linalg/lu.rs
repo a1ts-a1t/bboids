@@ -1,3 +1,4 @@
+use crate::Matrix;
 use crate::arith::{Magnitude, Scalar};
 use crate::matrix::Column;
 use crate::matrix::ViewMut;
@@ -22,7 +23,7 @@ impl<T: Magnitude> PivotSearch for T {
     }
 }
 
-// this is taken directly from dgetrf2
+#[derive(Debug, PartialEq)]
 pub enum LuInfo {
     Ok,
     ZeroValue(usize),
@@ -31,7 +32,7 @@ pub enum LuInfo {
 /// returns the pivots if successful
 /// copying off of dgetrf2
 /// https://netlib.org/lapack/explore-html/d8/d2f/group__getrf2_gaebbbe6a533dfea4454123e0553bd3575.html
-pub(crate) fn lu_factor_mut<T: Scalar + PivotSearch + Clone>(
+pub(crate) fn lu_driver<T: Scalar + PivotSearch + Clone>(
     a: &mut ViewMut<T>,
 ) -> (Vec<usize>, LuInfo) {
     let (m, n) = a.shape();
@@ -82,7 +83,7 @@ pub(crate) fn lu_factor_mut<T: Scalar + PivotSearch + Clone>(
     // [ a11 ]
     // [ a21 ]
     let mut a1 = a.view_mut((.., ..n1));
-    let (mut ipiv, info) = lu_factor_mut(&mut a1);
+    let (mut ipiv, info) = lu_driver(&mut a1);
 
     // apply the pivots from that lu to
     // [ a12 ]
@@ -108,11 +109,11 @@ pub(crate) fn lu_factor_mut<T: Scalar + PivotSearch + Clone>(
     }
 
     // set a22 = a22 - a21 * a12
-    // m, n = n2; k = n1
+    // the a22 block is (m - n1) x n2; the row loop is over m - n1, not n2
     for j in 0..n2 {
         for l in 0..n1 {
             let blj = a[(l, n1 + j)].clone();
-            for i in 0..n2 {
+            for i in 0..(m - n1) {
                 a[(n1 + i, n1 + j)] =
                     a[(n1 + i, n1 + j)].clone() + (blj.clone() * a[(n1 + i, l)].clone()).neg();
             }
@@ -120,7 +121,7 @@ pub(crate) fn lu_factor_mut<T: Scalar + PivotSearch + Clone>(
     }
 
     let mut a22 = a.view_mut((n1.., n1..));
-    let (ipiv2, info2) = lu_factor_mut(&mut a22);
+    let (ipiv2, info2) = lu_driver(&mut a22);
     ipiv.extend(ipiv2);
 
     let info = match (info, info2) {
@@ -139,4 +140,203 @@ pub(crate) fn lu_factor_mut<T: Scalar + PivotSearch + Clone>(
     }
 
     (ipiv, info)
+}
+
+fn to_pivot_matrix<T: Scalar>(ipiv: &[usize], rows: usize) -> Matrix<T> {
+    let mut p = Matrix::identity(rows);
+    let mut view = p.as_view_mut();
+    for (k, &ix) in ipiv.iter().enumerate() {
+        view.swap_rows(k, ix);
+    }
+    p
+}
+
+pub fn lu<T: Scalar + PivotSearch + Clone>(
+    a: &Matrix<T>,
+) -> (Matrix<T>, Matrix<T>, Matrix<T>, LuInfo) {
+    let mut a = a.clone();
+    let (m, n) = a.shape();
+    let k = usize::min(m, n);
+
+    let (ipiv, info) = {
+        let mut a_view = a.as_view_mut();
+        lu_driver(&mut a_view)
+    };
+    let p = to_pivot_matrix::<T>(&ipiv, m);
+
+    let u = a.triu(0).submatrix((..k, ..));
+    let mut l = a.tril(-1).submatrix((.., ..k));
+
+    for i in 0..k {
+        l[(i, i)] = T::one();
+    }
+
+    (p, l, u, info)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::arith::try_mul;
+    use crate::numerical::Tolerance;
+
+    fn lu_tolerance(a: &Matrix<f64>) -> Tolerance<f64> {
+        let (m, n) = a.shape();
+        let scale = 16.0 * f64::EPSILON * (m.max(n) as f64);
+        Tolerance::default()
+            .with_relative(scale)
+            .with_absolute(scale * f64::max(a.max_norm(), 1.0))
+    }
+
+    #[test]
+    fn test_lu_identity() {
+        let a = Matrix::<f64>::identity(5);
+        let (p, l, u, info) = lu(&a);
+
+        assert_eq!(info, LuInfo::Ok);
+        assert_eq!(p, a);
+        assert_eq!(l, a);
+        assert_eq!(u, a);
+    }
+
+    #[test]
+    fn test_lu_zeros() {
+        let a = Matrix::<f64>::zeros((5, 5));
+        let (p, l, u, info) = lu(&a);
+
+        assert_eq!(info, LuInfo::ZeroValue(0));
+        assert_eq!(p, Matrix::<f64>::identity(5));
+        assert_eq!(l, Matrix::<f64>::identity(5));
+        assert_eq!(u, a);
+    }
+
+    #[test]
+    fn test_lu_singular() {
+        let a = Matrix::<f64>::try_from_iter([
+            [1.0, 2.0, 3.0, 4.0, 5.0],
+            [5.0, 4.0, 3.0, 2.0, 1.0],
+            [6.0, 6.0, 6.0, 6.0, 1.0],
+            [6.0, 6.0, 6.0, 6.0, 6.0],
+            [1.0, 2.0, 3.0, 4.0, 0.0],
+        ])
+        .unwrap();
+        let (p, l, u, info) = lu(&a);
+
+        assert_eq!(info, LuInfo::ZeroValue(2));
+
+        let tolerance = lu_tolerance(&a);
+        let pa = try_mul(p, a).unwrap();
+        let lu = try_mul(l, u).unwrap();
+        assert!(Matrix::<f64>::is_close(pa, lu, tolerance));
+    }
+
+    #[test]
+    fn test_lu_tall() {
+        let a =
+            Matrix::<f64>::try_from_iter([[2.0, 1.0], [4.0, 3.0], [6.0, 5.0], [8.0, 7.0]]).unwrap();
+        let (p, l, u, info) = lu(&a);
+        assert_eq!(info, LuInfo::Ok);
+
+        assert_eq!(p.shape(), (4, 4));
+        assert_eq!(l.shape(), (4, 2));
+        assert_eq!(u.shape(), (2, 2));
+
+        let tolerance = lu_tolerance(&a);
+        let pa = try_mul(p, a).unwrap();
+        let lu = try_mul(l, u).unwrap();
+        assert!(Matrix::<f64>::is_close(pa, lu, tolerance));
+    }
+
+    #[test]
+    fn test_lu_wide() {
+        let a = Matrix::<f64>::try_from_iter([[1.0, 2.0, 3.0, 4.0], [6.0, 7.0, 8.0, 9.0]]).unwrap();
+        let (p, l, u, info) = lu(&a);
+        assert_eq!(info, LuInfo::Ok);
+
+        assert_eq!(p.shape(), (2, 2));
+        assert_eq!(l.shape(), (2, 2));
+        assert_eq!(u.shape(), (2, 4));
+
+        let tolerance = lu_tolerance(&a);
+        let pa = try_mul(p, a).unwrap();
+        let lu = try_mul(l, u).unwrap();
+        assert!(Matrix::<f64>::is_close(pa, lu, tolerance));
+    }
+
+    #[test]
+    fn test_lu_row() {
+        let a = Matrix::try_from_iter([[3.0, -1.0, 2.0]]).unwrap();
+        let (p, l, u, info) = lu(&a);
+
+        assert_eq!(info, LuInfo::Ok);
+
+        assert_eq!(p, Matrix::<f64>::identity(1));
+        assert_eq!(l, Matrix::<f64>::identity(1));
+        assert_eq!(u, a);
+    }
+
+    #[test]
+    fn test_lu_column() {
+        let a = Matrix::try_from_iter([[1.0], [5.0], [-3.0]]).unwrap();
+        let (p, l, u, info) = lu(&a);
+
+        assert_eq!(info, LuInfo::Ok);
+
+        let tolerance = lu_tolerance(&a);
+        let pa = try_mul(p, a).unwrap();
+        let lu = try_mul(l, u).unwrap();
+        assert!(Matrix::<f64>::is_close(pa, lu, tolerance));
+    }
+
+    #[test]
+    #[cfg(feature = "rand")]
+    fn test_lu_random_square() {
+        use rand::{SeedableRng, rngs::SmallRng};
+        for n in 1..=24usize {
+            for seed in 0..4u64 {
+                let mut rng = SmallRng::seed_from_u64(seed);
+                let a = Matrix::<f64>::random(&mut rng, n, n);
+
+                let (p, l, u, _) = lu(&a);
+
+                let tolerance = lu_tolerance(&a);
+                let pa = try_mul(p, a).unwrap();
+                let lu = try_mul(l, u).unwrap();
+                assert!(Matrix::<f64>::is_close(pa, lu, tolerance));
+            }
+        }
+    }
+
+    #[test]
+    #[cfg(feature = "rand")]
+    fn test_lu_random_rectangular() {
+        use rand::{SeedableRng, rngs::SmallRng};
+        for n in 1..=24usize {
+            for seed in 0..4u64 {
+                let mut rng = SmallRng::seed_from_u64(seed);
+
+                // tall matrices
+                {
+                    let a = Matrix::<f64>::random(&mut rng, 2 * n + 1, n);
+                    let (p, l, u, _) = lu(&a);
+
+                    let tolerance = lu_tolerance(&a);
+                    let pa = try_mul(p, a).unwrap();
+                    let lu = try_mul(l, u).unwrap();
+                    assert!(Matrix::<f64>::is_close(pa, lu, tolerance));
+                }
+
+                // wide matrices
+                {
+                    let a = Matrix::<f64>::random(&mut rng, n, 2 * n + 1);
+                    let (p, l, u, _) = lu(&a);
+
+                    let tolerance = lu_tolerance(&a);
+                    let pa = try_mul(p, a).unwrap();
+                    let lu = try_mul(l, u).unwrap();
+                    assert!(Matrix::<f64>::is_close(pa, lu, tolerance));
+                }
+            }
+        }
+    }
 }
