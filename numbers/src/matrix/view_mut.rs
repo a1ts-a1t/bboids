@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     Matrix,
-    matrix::{MatrixIndex, View, column::Column, region::Region},
+    matrix::{MatrixIndex, View, column::Column, region::Region, row::Row},
 };
 
 #[derive(PartialEq)]
@@ -91,19 +91,21 @@ impl<'a, T> ViewMut<'a, T> {
         })
     }
 
-    pub fn row<'b>(&'b self, i: usize) -> View<'b, T> {
+    pub fn row<'b>(&'b self, i: usize) -> Row<'b, T> {
         let row_region = self.region.crop_row(i);
 
-        View {
+        Row(View {
             buffer: self.buffer,
             region: row_region,
-        }
+        })
     }
 
-    pub fn checked_row<'b>(&'b self, i: usize) -> Option<View<'b, T>> {
-        self.region.try_crop_row(i).map(|subregion| View {
-            buffer: self.buffer,
-            region: subregion,
+    pub fn checked_row<'b>(&'b self, i: usize) -> Option<Row<'b, T>> {
+        self.region.try_crop_row(i).map(|subregion| {
+            Row(View {
+                buffer: self.buffer,
+                region: subregion,
+            })
         })
     }
 

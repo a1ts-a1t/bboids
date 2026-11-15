@@ -2,7 +2,6 @@ use std::ops::Index;
 
 use crate::matrix::View;
 
-// TODO: the same but for row
 pub struct Column<'a, T>(pub(crate) View<'a, T>);
 
 impl<'a, T> Index<usize> for Column<'a, T> {

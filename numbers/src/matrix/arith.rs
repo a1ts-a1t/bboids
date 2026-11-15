@@ -118,13 +118,13 @@ impl<T: Scalar + Clone> TryMul<Vector<T>> for Matrix<T> {
             return Err(LinAlgError::IncompatibleShape);
         }
 
-        let mut result = Vec::new();
-        let column_vector: Matrix<T> = other.into();
+        let mut result = Vec::with_capacity(m);
         for i in 0..m {
-            // TODO: there has to be a cleaner way to do this
-            let row = self.row(i);
-            let product = row.try_mul(column_vector.clone())?;
-            result.push(product[(0, 0)].clone());
+            let mut sum = T::zero();
+            for k in 0..n {
+                sum = sum + self[(i, k)].clone() * other[k].clone();
+            }
+            result.push(sum);
         }
 
         Ok(result.into())

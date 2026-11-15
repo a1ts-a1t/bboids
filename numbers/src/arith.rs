@@ -27,7 +27,7 @@ pub trait OrderedScalar: Scalar + PartialOrd {}
 impl<T> OrderedScalar for T where T: Scalar + PartialOrd {}
 
 pub trait Magnitude {
-    type Output: PartialOrd;
+    type Output: PartialOrd + Add<Output = Self::Output> + Mul<Output = Self::Output>;
 
     fn abs(&self) -> Self::Output;
 }
