@@ -90,32 +90,32 @@ pub(crate) fn lu_driver<T: Scalar + PivotSearch + Clone>(
     // [ a22 ]
     let mut a2 = a.view_mut((.., n1..));
     for (i, ix) in ipiv.iter().enumerate() {
-        a2.swap_rows(i, *ix); // i think this is what dlaswp does?
+        a2.swap_rows(i, *ix);
     }
 
     // find X where a11 * X = a12
     // and replace a12 with X
-    for j in 0..n2 {
-        for k in 0..n1 {
-            let bkj = a[(k, n1 + j)].clone();
-            if bkj == T::zero() {
+    for i in 1..n1 {
+        for k in 0..i {
+            let aik = a[(i, k)].clone();
+            if aik == T::zero() {
                 continue;
             }
 
-            for i in k + 1..n1 {
-                a[(i, n1 + j)] = a[(i, n1 + j)].clone() + (bkj.clone() * a[(i, k)].clone()).neg();
+            for j in 0..n2 {
+                a[(i, n1 + j)] =
+                    a[(i, n1 + j)].clone() + (aik.clone() * a[(k, n1 + j)].clone()).neg();
             }
         }
     }
 
     // set a22 = a22 - a21 * a12
-    // the a22 block is (m - n1) x n2; the row loop is over m - n1, not n2
-    for j in 0..n2 {
+    for i in 0..(m - n1) {
         for l in 0..n1 {
-            let blj = a[(l, n1 + j)].clone();
-            for i in 0..(m - n1) {
+            let ail = a[(n1 + i, l)].clone();
+            for j in 0..n2 {
                 a[(n1 + i, n1 + j)] =
-                    a[(n1 + i, n1 + j)].clone() + (blj.clone() * a[(n1 + i, l)].clone()).neg();
+                    a[(n1 + i, n1 + j)].clone() + (ail.clone() * a[(l, n1 + j)].clone()).neg();
             }
         }
     }
