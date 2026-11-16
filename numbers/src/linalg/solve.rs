@@ -83,7 +83,18 @@ pub fn solve<T: Scalar + PivotSearch + Clone>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::arith::TryMul;
+    use crate::numerical::Tolerance;
     use std::assert_matches;
+
+    // TODO: idk if our tolerance here should be the same as lu
+    fn tolerance(a: &Matrix<f64>) -> Tolerance<f64> {
+        let (_, n) = a.shape();
+        let scale = 16.0 * f64::EPSILON * (n as f64);
+        Tolerance::default()
+            .with_relative(scale)
+            .with_absolute(scale * f64::max(a.max_norm(), 1.0))
+    }
 
     #[test]
     fn test_solve_identity() {
@@ -118,5 +129,38 @@ mod tests {
         let result = solve(&a, &b);
 
         assert_matches!(result.unwrap_err(), LinAlgError::Singular);
+    }
+
+    #[test]
+    fn test_solve() {
+        let a = Matrix::<f64>::try_from_iter([[1.0, 1.0], [1.0, 2.0]]).unwrap();
+        let b = Vector::<f64>::from_iter([2.0, 3.0]);
+        let x = solve(&a, &b).unwrap();
+
+        let tolerance = tolerance(&a);
+        let actual = a.try_mul(x).unwrap();
+        assert!(Vector::<f64>::is_close(actual, b, tolerance));
+    }
+
+    #[test]
+    #[cfg(feature = "rand")]
+    fn test_lu_random() {
+        use rand::{SeedableRng, rngs::SmallRng};
+        for n in 1..=24usize {
+            for seed in 0..4u64 {
+                let mut rng = SmallRng::seed_from_u64(seed);
+                let a = Matrix::<f64>::random(&mut rng, n, n);
+                let b = Vector::<f64>::random(&mut rng, n);
+
+                match solve(&a, &b) {
+                    Ok(x) => {
+                        let tolerance = tolerance(&a);
+                        let actual = a.try_mul(x).unwrap();
+                        assert!(Vector::<f64>::is_close(actual, b, tolerance));
+                    }
+                    Err(err) => assert_matches!(err, LinAlgError::Singular),
+                }
+            }
+        }
     }
 }

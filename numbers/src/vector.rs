@@ -1,12 +1,19 @@
 use std::{
     borrow::Borrow,
-    iter::zip,
+    iter,
     ops::{Add, Index, IndexMut},
+};
+
+#[cfg(feature = "rand")]
+use rand::{
+    Rng, RngExt,
+    distr::{Distribution, StandardUniform},
 };
 
 use crate::{
     arith::{Magnitude, Scalar, TryAdd},
     err::LinAlgError,
+    numerical::{Tolerance, is_close},
 };
 
 #[derive(PartialEq, Debug, Clone)]
@@ -103,6 +110,36 @@ impl<T> Vector<T> {
     }
 }
 
+#[cfg(feature = "rand")]
+impl<T> Vector<T>
+where
+    StandardUniform: Distribution<T>,
+{
+    pub fn random<R: Rng + ?Sized>(rng: &mut R, len: usize) -> Self {
+        Self(iter::repeat_with(|| rng.random()).take(len).collect())
+    }
+}
+
+impl<T: Scalar + Magnitude> Vector<T>
+where
+    // TODO: this is just to support passing in one tolerance
+    // for all comparisons below (tolerance.clone())
+    // is this really necessary?
+    <T as Magnitude>::Output: Clone,
+{
+    pub fn is_close(
+        a: Vector<T>,
+        b: Vector<T>,
+        tolerance: Tolerance<<T as Magnitude>::Output>,
+    ) -> bool {
+        if a.shape() != b.shape() {
+            return false;
+        }
+
+        iter::zip(a.0, b.0).all(|(a, b)| is_close(a, b, tolerance.clone()))
+    }
+}
+
 pub fn dot<T: Scalar + Clone, Lhs: Borrow<Vector<T>>, Rhs: Borrow<Vector<T>>>(
     lhs: Lhs,
     rhs: Rhs,
@@ -114,7 +151,7 @@ pub fn dot<T: Scalar + Clone, Lhs: Borrow<Vector<T>>, Rhs: Borrow<Vector<T>>>(
         return Err(LinAlgError::IncompatibleShape);
     }
 
-    Ok(zip(vec1, vec2).fold(T::zero(), |acc, (a, b)| acc + (a.clone() * b.clone())))
+    Ok(iter::zip(vec1, vec2).fold(T::zero(), |acc, (a, b)| acc + (a.clone() * b.clone())))
 }
 
 #[cfg(test)]
