@@ -1,10 +1,17 @@
-use std::ops::{Add, Mul, Neg};
+use std::ops::{Add, Mul, Neg, Sub};
 
 use num::{Float, One, Signed, Zero};
 
 // element of a field
 pub trait Scalar:
-    Sized + Add<Output = Self> + Mul<Output = Self> + Zero + Neg<Output = Self> + PartialEq + One
+    Sized
+    + Add<Output = Self>
+    + Mul<Output = Self>
+    + Zero
+    + Neg<Output = Self>
+    + PartialEq
+    + One
+    + Sub<Output = Self>
 {
     fn inverse(&self) -> Option<Self>;
 }

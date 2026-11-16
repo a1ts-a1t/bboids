@@ -1,7 +1,7 @@
 use std::{
     borrow::Borrow,
     iter::zip,
-    ops::{Add, Index},
+    ops::{Add, Index, IndexMut},
 };
 
 use crate::{
@@ -15,6 +15,12 @@ pub struct Vector<T>(Vec<T>);
 impl<T> Vector<T> {
     pub fn shape(&self) -> usize {
         self.0.len()
+    }
+}
+
+impl<T> IndexMut<usize> for Vector<T> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.0[index]
     }
 }
 
@@ -88,6 +94,12 @@ impl<T: Add<Output = T>> TryAdd for Vector<T> {
 impl<T: Magnitude> Vector<T> {
     pub fn abs(&self) -> Vector<T::Output> {
         Vector(self.0.iter().map(|ele| ele.abs()).collect())
+    }
+}
+
+impl<T> Vector<T> {
+    pub fn swap(&mut self, i: usize, j: usize) {
+        self.0.swap(i, j);
     }
 }
 

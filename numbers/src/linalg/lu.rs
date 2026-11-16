@@ -103,8 +103,7 @@ pub(crate) fn lu_driver<T: Scalar + PivotSearch + Clone>(
             }
 
             for j in 0..n2 {
-                a[(i, n1 + j)] =
-                    a[(i, n1 + j)].clone() + (aik.clone() * a[(k, n1 + j)].clone()).neg();
+                a[(i, n1 + j)] = a[(i, n1 + j)].clone() - (aik.clone() * a[(k, n1 + j)].clone());
             }
         }
     }
@@ -115,7 +114,7 @@ pub(crate) fn lu_driver<T: Scalar + PivotSearch + Clone>(
             let ail = a[(n1 + i, l)].clone();
             for j in 0..n2 {
                 a[(n1 + i, n1 + j)] =
-                    a[(n1 + i, n1 + j)].clone() + (ail.clone() * a[(l, n1 + j)].clone()).neg();
+                    a[(n1 + i, n1 + j)].clone() - (ail.clone() * a[(l, n1 + j)].clone());
             }
         }
     }

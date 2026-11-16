@@ -26,6 +26,7 @@ macro_rules! default_tolerance {
     ($type:ty) => {
         impl Default for Tolerance<$type> {
             fn default() -> Self {
+                // matches numpy's defaults
                 Self {
                     relative: (10000 as $type).recip(),
                     absolute: (100000000 as $type).recip(),
