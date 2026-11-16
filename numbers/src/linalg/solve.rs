@@ -2,31 +2,22 @@ use crate::{
     Matrix, Vector,
     arith::Scalar,
     err::LinAlgError,
-    linalg::lu::{LuInfo, PivotSearch, lu_driver},
+    linalg::lu::{LuInfo, PivotSearch, lu_factor},
 };
 
-pub fn solve<T: Scalar + PivotSearch + Clone>(
-    a: &Matrix<T>,
-    b: &Vector<T>,
-) -> Result<Vector<T>, LinAlgError> {
-    if !a.is_square() {
+pub fn lu_solve_mut<T: Scalar + PivotSearch + Clone>(
+    lu: &Matrix<T>,
+    ipiv: &[usize],
+    b: &mut Vector<T>,
+) -> Result<(), LinAlgError> {
+    if !lu.is_square() {
         return Err(LinAlgError::IncompatibleShape);
     }
 
-    let (n, _) = a.shape();
+    let (n, _) = lu.shape();
     if n == 0 || n != b.shape() {
         return Err(LinAlgError::IncompatibleShape);
-    }
-
-    let mut a = a.clone();
-    let mut a = a.as_view_mut();
-    let (ipiv, info) = lu_driver(&mut a);
-
-    if matches!(info, LuInfo::ZeroValue(_)) {
-        return Err(LinAlgError::Singular);
-    }
-
-    let mut b = b.clone();
+    };
 
     // dgetrs
     // https://netlib.org/lapack/explore-html/df/d36/group__getrs_gaacd7a8465c8cc0e4e8b88ba4b453630c.html
@@ -38,7 +29,7 @@ pub fn solve<T: Scalar + PivotSearch + Clone>(
     for i in 0..n {
         let mut sum = T::zero();
         for j in 0..i {
-            sum = sum + (b[j].clone() * a[(i, j)].clone());
+            sum = sum + (b[j].clone() * lu[(i, j)].clone());
         }
         b[i] = b[i].clone() - sum;
     }
@@ -47,12 +38,46 @@ pub fn solve<T: Scalar + PivotSearch + Clone>(
     for i in (0..n).rev() {
         let mut sum = T::zero();
         for j in i + 1..n {
-            sum = sum + (b[j].clone() * a[(i, j)].clone());
+            sum = sum + (b[j].clone() * lu[(i, j)].clone());
         }
-        b[i] = (b[i].clone() - sum) * a[(i, i)].inverse().unwrap();
+        b[i] = (b[i].clone() - sum) * lu[(i, i)].inverse().ok_or(LinAlgError::Singular)?;
     }
 
+    Ok(())
+}
+
+pub fn lu_solve<T: Scalar + PivotSearch + Clone>(
+    lu: &Matrix<T>,
+    ipiv: &[usize],
+    b: &Vector<T>,
+) -> Result<Vector<T>, LinAlgError> {
+    let mut b = b.clone();
+    lu_solve_mut(lu, ipiv, &mut b)?;
     Ok(b)
+}
+
+pub fn solve<T: Scalar + PivotSearch + Clone>(
+    a: &Matrix<T>,
+    b: &Vector<T>,
+) -> Result<Vector<T>, LinAlgError> {
+    // some early shape checks. quick enough to repeat
+    if !a.is_square() {
+        return Err(LinAlgError::IncompatibleShape);
+    }
+
+    let (n, _) = a.shape();
+
+    if n == 0 || n != b.shape() {
+        return Err(LinAlgError::IncompatibleShape);
+    };
+
+    let (lu, ipiv, info) = lu_factor(a);
+
+    if matches!(info, LuInfo::ZeroValue(_)) {
+        return Err(LinAlgError::Singular);
+    }
+
+    lu_solve(&lu, &ipiv, b)
 }
 
 #[cfg(test)]

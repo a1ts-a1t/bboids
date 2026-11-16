@@ -32,9 +32,7 @@ pub enum LuInfo {
 /// returns the pivots if successful
 /// copying off of dgetrf2
 /// https://netlib.org/lapack/explore-html/d8/d2f/group__getrf2_gaebbbe6a533dfea4454123e0553bd3575.html
-pub(crate) fn lu_driver<T: Scalar + PivotSearch + Clone>(
-    a: &mut ViewMut<T>,
-) -> (Vec<usize>, LuInfo) {
+fn lu_driver<T: Scalar + PivotSearch + Clone>(a: &mut ViewMut<T>) -> (Vec<usize>, LuInfo) {
     let (m, n) = a.shape();
 
     if m == 0 || n == 0 {
@@ -148,6 +146,23 @@ fn to_pivot_matrix<T: Scalar>(ipiv: &[usize], rows: usize) -> Matrix<T> {
         view.swap_rows(k, ix);
     }
     p
+}
+
+pub fn lu_factor_mut<T: Scalar + PivotSearch + Clone>(a: &mut Matrix<T>) -> (Vec<usize>, LuInfo) {
+    let mut a_view = a.as_view_mut();
+    lu_driver(&mut a_view)
+}
+
+pub fn lu_factor<T: Scalar + PivotSearch + Clone>(
+    a: &Matrix<T>,
+) -> (Matrix<T>, Vec<usize>, LuInfo) {
+    let mut a = a.clone();
+    let (ipiv, info) = {
+        let mut a_view = a.as_view_mut();
+        lu_driver(&mut a_view)
+    };
+
+    (a, ipiv, info)
 }
 
 pub fn lu<T: Scalar + PivotSearch + Clone>(
